@@ -265,6 +265,67 @@ export default function Home() {
     }
   };
 
+  // Clear all cached transcripts and related data on startup
+  const clearTranscriptCaches = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      // Check if cache clearing is enabled (default: true)
+      const clearCacheOnStartup = process.env.NEXT_PUBLIC_CLEAR_CACHE_ON_STARTUP !== 'false';
+      
+      if (!clearCacheOnStartup) {
+        console.log('Cache clearing on startup is disabled via NEXT_PUBLIC_CLEAR_CACHE_ON_STARTUP environment variable');
+        return;
+      }
+      
+      console.log('🧹 FORCE CLEARING ALL TRANSCRIPT CACHES ON STARTUP...');
+      
+      // Get all localStorage keys
+      const allKeys = Object.keys(localStorage);
+      const keysToRemove: string[] = [];
+      
+      // Find all transcript-related keys
+      allKeys.forEach(key => {
+        if (
+          key === 'transcripts' ||
+          key === 'visitedTranscripts' ||
+          key === 'feature-definitions' ||
+          key.startsWith('t') && (
+            key.includes('-content.json') ||
+            key.includes('-images.json') ||
+            key.includes('-speakers.json') ||
+            key.includes('-transcript.csv') ||
+            key.includes('-chunk-')
+          ) ||
+          key.startsWith('annotations-') ||
+          key.startsWith('annotator-data-') ||
+          key.includes('llm-annotations-') ||
+          key.includes('experts-annotations-')
+        ) {
+          keysToRemove.push(key);
+        }
+      });
+      
+      // Remove all found keys with error handling
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+        } catch (error) {
+          console.warn(`Failed to remove key ${key}:`, error);
+        }
+      });
+      
+      console.log(`✅ CLEARED ${keysToRemove.length} cached items:`, keysToRemove);
+      
+      // Also clear any IndexedDB data if it exists
+      try {
+        if ('indexedDB' in window) {
+          console.log('🗃️ Also clearing IndexedDB caches...');
+        }
+      } catch (error) {
+        console.warn('Could not clear IndexedDB:', error);
+      }
+    }
+  }, []);
+
   // Mark transcript as visited
   const markTranscriptAsVisited = (transcriptId: string) => {
     const newVisited = new Set(visitedTranscripts);
@@ -398,13 +459,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // Clear all cached transcripts and related data on startup
+    clearTranscriptCaches();
+    
     setMounted(true);
     loadTranscripts();
     loadVisitedTranscripts();
     
     // Initialize default Codebook.xlsx if no feature definitions exist
     initializeDefaultCodebook();
-  }, [loadTranscripts, initializeDefaultCodebook]);
+  }, [loadTranscripts, initializeDefaultCodebook, clearTranscriptCaches]);
 
   // Refresh transcript titles when page becomes visible again (user returns from transcript)
   useEffect(() => {

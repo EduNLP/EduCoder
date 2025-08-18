@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
 
     // Create a unique filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    const fileName = `transcript_t${transcriptNumber}_annotations_${timestamp}.xlsx`;
+    // Handle transcript numbers that may or may not have 't' prefix
+    const normalizedTranscriptNumber = transcriptNumber.startsWith('t') ? transcriptNumber : `t${transcriptNumber}`;
+    const fileName = `transcript_${normalizedTranscriptNumber}_annotations_${timestamp}.xlsx`;
 
     console.log('Uploading XLSX file to Google Cloud Storage:', {
       fileName,

@@ -256,20 +256,6 @@ export default function MultiAnnotatorComparisonView({
   const [otherAnnotators, setOtherAnnotators] = useState<AnnotatorData[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
-  // Debug when selectedCategory changes
-  React.useEffect(() => {
-    console.log('>>> SELECTED CATEGORY CHANGED:', selectedCategory);
-  }, [selectedCategory]);
-  
-  // Debug tableData structure
-  React.useEffect(() => {
-    console.log('>>> TABLE DATA STRUCTURE:', {
-      length: tableData.length,
-      firstFewRows: tableData.slice(0, 3).map(row => ({ col2: row.col2, type: typeof row.col2 })),
-      lastFewRows: tableData.slice(-3).map(row => ({ col2: row.col2, type: typeof row.col2 })),
-      allLineNumbers: tableData.map(row => row.col2)
-    });
-  }, [tableData]);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<{
     type: 'success' | 'error' | null;
@@ -360,9 +346,56 @@ export default function MultiAnnotatorComparisonView({
           const baseId = file.name.replace(/\.[^/.]+$/, "");
           const annotatorId = `${baseId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           
+          // Try to extract a meaningful display name from the filename
+          // Handle various filename patterns to extract username
+          const extractDisplayName = (filename: string): string => {
+            // Remove file extension
+            const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+            
+            // Pattern 1: username_transcript_t01_annotations_timestamp
+            const userPrefixMatch = nameWithoutExt.match(/^([a-zA-Z0-9_-]+)_transcript_t\d+_annotations_/);
+            if (userPrefixMatch) {
+              return userPrefixMatch[1]; // Extract username from prefix
+            }
+            
+            // Pattern 2: transcript_t01_annotations_username_timestamp
+            const userMiddleMatch = nameWithoutExt.match(/^transcript_t\d+_annotations_([a-zA-Z0-9_-]+)_\d{4}-\d{2}-\d{2}/);
+            if (userMiddleMatch) {
+              return userMiddleMatch[1]; // Extract username from middle
+            }
+            
+            // Pattern 3: transcript_t01_annotations_timestamp_username
+            const userSuffixMatch = nameWithoutExt.match(/^transcript_t\d+_annotations_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_([a-zA-Z0-9_-]+)$/);
+            if (userSuffixMatch) {
+              return userSuffixMatch[1]; // Extract username from suffix
+            }
+            
+            // Pattern 4: Standard pattern without username - prompt for manual entry
+            if (nameWithoutExt.match(/^transcript_t\d+_annotations_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}$/)) {
+              return "Annotator"; // Generic name that user should customize
+            }
+            
+            // Pattern 5: If filename has underscores, try to get a meaningful part
+            const parts = nameWithoutExt.split('_');
+            if (parts.length > 1) {
+              // Skip common technical parts
+              const filtered = parts.filter(part => 
+                !part.match(/^(transcript|annotations|t\d+|\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2})$/)
+              );
+              if (filtered.length > 0) {
+                return filtered[0]; // Return first meaningful part
+              }
+            }
+            
+            // Fallback: Use full filename but encourage manual naming
+            return nameWithoutExt;
+          };
+          
+          const displayName = extractDisplayName(file.name);
+          
           const annotatorData: AnnotatorData = {
             annotator_id: annotatorId,
-            display_name: baseId,
+            display_name: displayName,
             description: '',
             filename: baseId, // Use base filename without extension for display
             upload_date: new Date().toISOString(),
@@ -629,13 +662,21 @@ export default function MultiAnnotatorComparisonView({
 
   const handleExpertNaming = (annotatorData: AnnotatorData) => {
     setPendingAnnotatorData(annotatorData);
-    setExpertName(annotatorData.display_name);
+    // If display name is generic (like "Annotator"), clear it so user starts fresh
+    // Otherwise, keep the extracted name as a starting point
+    const initialName = annotatorData.display_name === 'Annotator' ? '' : annotatorData.display_name;
+    setExpertName(initialName);
     setExpertDescription('');
     setShowNamingModal(true);
   };
 
   const saveExpertInfo = () => {
-    if (pendingAnnotatorData && expertName.trim()) {
+    if (pendingAnnotatorData) {
+      if (!expertName.trim()) {
+        alert('Please enter a name for this annotator');
+        return;
+      }
+      
       const updatedAnnotator = {
         ...pendingAnnotatorData,
         display_name: expertName.trim(),
@@ -916,7 +957,7 @@ export default function MultiAnnotatorComparisonView({
 
             const annotatorData: AnnotatorData = {
               annotator_id: `${userId}_${fileName}`,
-              display_name: `${userId} - ${fileName.replace('.xlsx', '')}`,
+              display_name: userId,
               description: `Pulled from cloud storage`,
               filename: fileName,
               upload_date: new Date().toISOString(),
@@ -999,15 +1040,6 @@ export default function MultiAnnotatorComparisonView({
     });
     
     const allCategories = Array.from(categories).sort();
-    console.log('>>> DATA STRUCTURE SUMMARY:', {
-      allCategories,
-      hasCurrentData: !!currentAnnotatorData,
-      currentDataKeys: currentAnnotatorData ? Object.keys(currentAnnotatorData) : [],
-      otherAnnotatorsCount: otherAnnotators.length,
-      otherAnnotatorIds: otherAnnotators.map(a => a.annotator_id),
-      selectedCategory,
-      otherAnnotatorCategories: otherAnnotators.map(a => ({ id: a.annotator_id, categories: Object.keys(a.categories), annotations: Object.keys(a.annotations) }))
-    });
     
     return allCategories;
   };
@@ -1041,21 +1073,12 @@ export default function MultiAnnotatorComparisonView({
     });
     
     const featuresArray = Array.from(features).sort();
-    console.log('>>> FEATURES FOR CATEGORY:', { 
-      category, 
-      featuresArray, 
-      currentHasCategory: !!(currentAnnotatorData && currentAnnotatorData[category]),
-      totalFeatures: featuresArray.length
-    });
     
     return featuresArray;
   }, [currentAnnotatorData, otherAnnotators]);
 
   const getCurrentAnnotatorValue = useCallback((lineNumber: number, category: string, feature: string): boolean | number | string | null => {
-    console.log('>>> getCurrentAnnotatorValue called:', { lineNumber, category, feature });
-    
     if (!currentAnnotatorData || !currentAnnotatorData[category]) {
-      console.log('>>> No current annotator data or category - current user has no data for this category/feature combination');
       // Return null instead of throwing error - this indicates the current user hasn't annotated this category
       // This is expected when uploaded files have categories/features not in the current codebook
       return null;
@@ -1067,29 +1090,17 @@ export default function MultiAnnotatorComparisonView({
     const rowIndex = tableData.findIndex(row => 
       row.col2 === lineNumber || parseInt(row.col2?.toString()) === lineNumber
     );
-    console.log('>>> Row lookup for current user:');
-    console.log('  lineNumber:', lineNumber);
-    console.log('  lineNumberStr:', lineNumber.toString());
-    console.log('  rowIndex:', rowIndex);
-    console.log('  tableDataLength:', tableData.length);
-    console.log('  tableDataCol2Values:', tableData.map(row => row.col2));
-    console.log('  lookingFor:', lineNumber.toString());
-    
     if (rowIndex === -1) {
-      console.log('>>> Row not found in tableData for current user, skipping');
       return null;
     }
     
     const annotations = currentAnnotatorData[category].annotations[rowIndex];
-    console.log('>>> Current user annotations lookup:', { category, rowIndex, hasAnnotations: !!annotations });
     
     if (!annotations) {
-      console.log('>>> No annotations for this row, returning false');
       return false;
     }
     
     const value = annotations[feature];
-    console.log('>>> Found current value:', { feature, value, type: typeof value });
     
     // Return the actual value, or false if undefined (false will show as "No")
     return value ?? false;
@@ -1111,30 +1122,19 @@ export default function MultiAnnotatorComparisonView({
   }, [hasSelectableColumn]);
 
   const getAnnotatorValue = useCallback((annotator: AnnotatorData, lineNumber: number, category: string, feature: string): boolean | number | string | null => {
-    console.log('>>> getAnnotatorValue called:', { annotatorId: annotator.annotator_id, lineNumber, category, feature });
-    
     // For uploaded annotators, get annotation data directly by line number
     // Don't require the line to exist in current tableData since uploaded files may have different line numbers
     const lineAnnotations = annotator.annotations[lineNumber];
-    console.log('>>> Line annotations for', annotator.annotator_id);
-    console.log('  lineNumber:', lineNumber);
-    console.log('  hasLineAnnotations:', !!lineAnnotations);
-    console.log('  availableLines:', Object.keys(annotator.annotations).slice(0, 10));
-    console.log('  totalAnnotationLines:', Object.keys(annotator.annotations).length);
     
     if (!lineAnnotations || !lineAnnotations[category]) {
-      console.log('>>> No line annotations or category:', { hasLineAnnotations: !!lineAnnotations, category, hasCategory: lineAnnotations ? !!lineAnnotations[category] : false });
       return null;
     }
     
     const value = lineAnnotations[category][feature] ?? null;
-    console.log('>>> Found annotator value:', { annotatorId: annotator.annotator_id, lineNumber, category, feature, value, type: typeof value });
     return value;
   }, []);
 
   const getDisplayTableData = () => {
-    console.log('>>> GET DISPLAY TABLE DATA - START');
-    console.log('  initial tableData length:', tableData.length);
     let filteredData = tableData;
     
     // Apply search filter - search both line# and utterance simultaneously
@@ -1201,9 +1201,6 @@ export default function MultiAnnotatorComparisonView({
       });
     }
     
-    console.log('>>> GET DISPLAY TABLE DATA - END');
-    console.log('  final filteredData length:', filteredData.length);
-    console.log('  final line numbers:', filteredData.map(row => row.col2));
     
     return filteredData;
   };
@@ -1505,13 +1502,6 @@ export default function MultiAnnotatorComparisonView({
   const allCategories = getAllCategories();
   const displayTableData = getDisplayTableData();
   
-  // Debug displayTableData
-  React.useEffect(() => {
-    console.log('>>> DISPLAY TABLE DATA:');
-    console.log('  length:', displayTableData.length);
-    console.log('  lineNumbers:', displayTableData.map(row => row.col2));
-    console.log('  hasLine16:', displayTableData.some(row => row.col2 === 16));
-  }, [displayTableData]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-1">
@@ -2137,9 +2127,6 @@ export default function MultiAnnotatorComparisonView({
                   </thead>
                   <tbody>
                     {displayTableData.map((row, index) => {
-                      if (parseInt(row.col2?.toString()) === 16) {
-                        console.log('>>> FOUND LINE 16 in displayTableData:', { index, col2: row.col2, type: typeof row.col2, row });
-                      }
                       const isSelectable = isTableRowSelectable(row);
                       
                       // Use speaker colors like in transcript page
@@ -2355,15 +2342,23 @@ export default function MultiAnnotatorComparisonView({
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expert Name
+                    Annotator Username or Display Name
                   </label>
                   <input
                     type="text"
                     value={expertName}
                     onChange={(e) => setExpertName(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter expert name (e.g., Dr. Smith)"
+                    placeholder="Enter username (e.g., abcdef)"
+                    autoFocus
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter the username or identifier for this annotator (this will be displayed in the comparison table)
+                  </p>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                    <strong>💡 Tip:</strong> For automatic username detection, name your files like:<br/>
+                    <code className="text-blue-900">username_transcript_t01_annotations_timestamp.xlsx</code>
+                  </div>
                 </div>
                 
                 <div>

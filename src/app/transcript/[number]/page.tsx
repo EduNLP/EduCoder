@@ -4257,6 +4257,12 @@ let ALLOWED_SHEETS: string[] = []; // Will be populated dynamically
         return;
       }
       
+      // Preserve scroll position to prevent jumping to top
+      const scrollContainer = document.querySelector('.overflow-auto') || document.documentElement || window;
+      const currentScrollTop = scrollContainer instanceof Window ? scrollContainer.scrollY : 
+                               scrollContainer === document.documentElement ? document.documentElement.scrollTop : 
+                               scrollContainer.scrollTop;
+      
       console.log('handleFeatureChange called:', { lineNumber, code, value, ALLOWED_SHEETS });
       
     setAnnotationData(prev => {
@@ -4325,6 +4331,19 @@ let ALLOWED_SHEETS: string[] = []; // Will be populated dynamically
         
         return newAnnotationData;
       });
+      
+      // Restore scroll position after state update to prevent jumping to top
+      // Use requestAnimationFrame to ensure DOM has been updated
+      requestAnimationFrame(() => {
+        if (scrollContainer instanceof Window) {
+          scrollContainer.scrollTo(0, currentScrollTop);
+        } else if (scrollContainer === document.documentElement) {
+          document.documentElement.scrollTop = currentScrollTop;
+        } else {
+          scrollContainer.scrollTop = currentScrollTop;
+        }
+      });
+      
     } catch (error) {
       console.error('Error in handleFeatureChange:', error);
     }
