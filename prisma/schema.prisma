@@ -1,0 +1,166 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model User {
+  id         String        @id @default(uuid()) @db.Uuid
+  name       String
+  username   String        @unique
+  password   String
+  auth_user_id String?     @unique
+  role       Role          @default(user)
+  createdAt  DateTime      @default(now())
+  lastLogin  DateTime?
+  transcripts Transcripts[]
+  annotations Annotations[]
+  notes      Notes[]
+  flagAssignments FlagAssignments[]
+}
+
+model Transcripts {
+  id                          String   @id @default(uuid()) @db.Uuid
+  uploaded_by                 String   @db.Uuid
+  title                       String
+  grade                       String?
+  instruction_context         String
+  transcript_file_name        String?   @db.Text
+  gcs_path                    String   @db.Text
+  upload_time                 DateTime @default(now())
+  llm_annotation              Boolean  @default(false)
+  video_uploaded              Boolean  @default(false)
+  video_id                    String?  @unique @db.Uuid
+  annotation_file_name        String?   @db.Text
+  llm_annotation_gcs_path     String?  @db.Text
+  instructional_material_link String? @db.Text
+  uploader                    User    @relation(fields: [uploaded_by], references: [id])
+  video                       Videos? @relation("TranscriptVideo", fields: [video_id], references: [id])
+  materials                   InstructionalMaterial[]
+  lines                       TranscriptLines[]
+  annotations                 Annotations[]
+  segments                    TranscriptSegments[]
+  notes                       Notes[]
+
+  @@map("Transcripts")
+}
+
+model Notes {
+  note_id       String      @id @default(uuid()) @db.Uuid
+  user_id       String      @db.Uuid
+  transcript_id String      @db.Uuid
+  note_number   Int
+  title         String
+  q1            String      @db.Text
+  q2            String      @db.Text
+  q3            String      @db.Text
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  assignments   NoteAssignments[]
+
+  @@map("Notes")
+}
+
+model NoteAssignments {
+  note_id String          @db.Uuid
+  line_id String          @db.Uuid
+  createdAt DateTime      @default(now())
+  note    Notes           @relation(fields: [note_id], references: [note_id], onDelete: Cascade)
+  line    TranscriptLines @relation(fields: [line_id], references: [line_id], onDelete: Cascade)
+
+  @@id([note_id, line_id])
+  @@map("NoteAssignments")
+}
+
+model FlagAssignments {
+  user_id String          @db.Uuid
+  line_id String          @db.Uuid
+  createdAt DateTime      @default(now())
+  user    User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  line    TranscriptLines @relation(fields: [line_id], references: [line_id], onDelete: Cascade)
+
+  @@id([user_id, line_id])
+  @@map("FlagAssignments")
+}
+
+model InstructionalMaterial {
+  id            String        @id @default(uuid()) @db.Uuid
+  transcript_id String        @db.Uuid
+  gcs_path      String        @db.Text
+  image_title   String        @db.Text
+  order_index   Int
+  uploaded_at   DateTime      @default(now())
+  transcript    Transcripts   @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+}
+
+model Annotations {
+  id            String            @id @default(uuid()) @db.Uuid
+  transcript_id String            @db.Uuid
+  created_for   String            @db.Uuid
+  hide                 Boolean?          @default(false)
+  annotation_completed Boolean           @default(false)
+  gcs_path             String            @db.Text
+  upload_time          DateTime          @default(now())
+  last_updated         DateTime          @updatedAt
+  transcript           Transcripts       @relation(fields: [transcript_id], references: [id])
+  user                 User              @relation(fields: [created_for], references: [id])
+
+  @@map("Annotations")
+}
+
+model TranscriptLines {
+  line_id       String      @id @default(uuid()) @db.Uuid
+  transcript_id String      @db.Uuid
+  segment_id    String?     @db.Uuid
+  line          Int
+  speaker       String?
+  utterance     String?     @db.Text
+  in_cue        Decimal?    @db.Decimal(10, 2)
+  out_cue       Decimal?    @db.Decimal(10, 2)
+  transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  segmentRef    TranscriptSegments? @relation(fields: [segment_id], references: [id], onDelete: SetNull)
+  noteAssignments NoteAssignments[]
+  flagAssignments FlagAssignments[]
+
+  @@map("TranscriptLines")
+}
+
+model Videos {
+  id            String      @id @default(uuid()) @db.Uuid
+  file_name     String      @db.Text
+  mime_type     String?     @db.Text
+  gcs_path      String      @db.Text
+  uploaded_at   DateTime    @default(now())
+  transcript    Transcripts? @relation("TranscriptVideo")
+
+  @@map("Videos")
+}
+
+model TranscriptSegments {
+  id            String      @id @default(uuid()) @db.Uuid
+  transcript_id String      @db.Uuid
+  segment_title String      @db.Text
+  segment_index Int
+  start_time    Decimal?    @db.Decimal(10, 2)
+  end_time      Decimal?    @db.Decimal(10, 2)
+  transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  lines         TranscriptLines[]
+
+  @@map("TranscriptSegments")
+}
+
+enum Role {
+  user
+  annotator
+  admin
+}

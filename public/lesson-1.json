@@ -1,0 +1,3437 @@
+{
+  "source": "Today's Classroom - Elko Middle School.json",
+  "utterances": [
+    {
+      "line_number": 1,
+      "start_time": 15.36,
+      "end_time": 16.08,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Hi, I'm Miss Chu and this is"
+    },
+    {
+      "line_number": 2,
+      "start_time": 16.16,
+      "end_time": 16.84,
+      "duration": 0.68,
+      "speaker": "2",
+      "utterance": "Miss P."
+    },
+    {
+      "line_number": 3,
+      "start_time": 17.12,
+      "end_time": 18.96,
+      "duration": 1.84,
+      "speaker": "1",
+      "utterance": "And welcome to Elga Middle School."
+    },
+    {
+      "line_number": 4,
+      "start_time": 19.16,
+      "end_time": 22.12,
+      "duration": 2.96,
+      "speaker": "1",
+      "utterance": "This is our sixth grade collaborative math class."
+    },
+    {
+      "line_number": 5,
+      "start_time": 22.36,
+      "end_time": 26.04,
+      "duration": 3.68,
+      "speaker": "1",
+      "utterance": "And today we're going to be learning about coordinate planes."
+    },
+    {
+      "line_number": 6,
+      "start_time": 27.4,
+      "end_time": 34.08,
+      "duration": 6.68,
+      "speaker": "1",
+      "utterance": "All right, so in the center of your desk you have um one of our plastic sleeves with a coordinate plane on it."
+    },
+    {
+      "line_number": 7,
+      "start_time": 34.08,
+      "end_time": 35.56,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "I want you guys to go ahead and grab one."
+    },
+    {
+      "line_number": 8,
+      "start_time": 35.56,
+      "end_time": 36.56,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "You can each look at one."
+    },
+    {
+      "line_number": 9,
+      "start_time": 39.56,
+      "end_time": 41.92,
+      "duration": 2.36,
+      "speaker": "1",
+      "utterance": "And we're going to look at the side that looks like the board."
+    },
+    {
+      "line_number": 10,
+      "start_time": 41.92,
+      "end_time": 46.52,
+      "duration": 4.6,
+      "speaker": "1",
+      "utterance": "So it's the one that has five not the not the smaller one that has something on this side."
+    },
+    {
+      "line_number": 11,
+      "start_time": 47.28,
+      "end_time": 51.92,
+      "duration": 4.64,
+      "speaker": "1",
+      "utterance": "And with your partner, your elbow partner, the one sitting next to oh no markers yet no markers."
+    },
+    {
+      "line_number": 12,
+      "start_time": 51.92,
+      "end_time": 52.84,
+      "duration": 0.92,
+      "speaker": "1",
+      "utterance": "We'll do markers in a minute."
+    },
+    {
+      "line_number": 13,
+      "start_time": 53.52,
+      "end_time": 58.2,
+      "duration": 4.68,
+      "speaker": "1",
+      "utterance": "With your elbow partner, I want you guys to talk about what are some of the things you notice about a coordinate plane."
+    },
+    {
+      "line_number": 14,
+      "start_time": 58.2,
+      "end_time": 59.32,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "This is a coordinate plane."
+    },
+    {
+      "line_number": 15,
+      "start_time": 59.96,
+      "end_time": 62.24,
+      "duration": 2.28,
+      "speaker": "1",
+      "utterance": "And I want you guys to talk about what do you notice about the coordinate plane."
+    },
+    {
+      "line_number": 16,
+      "start_time": 63.84,
+      "end_time": 68.24,
+      "duration": 4.4,
+      "speaker": "1",
+      "utterance": "And I'm going to look for a quiet hand who can tell me something they noticed about this coordinate plane."
+    },
+    {
+      "line_number": 17,
+      "start_time": 68.44,
+      "end_time": 69.68,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Abby, what is something you noticed?"
+    },
+    {
+      "line_number": 18,
+      "start_time": 69.76,
+      "end_time": 72.72,
+      "duration": 2.96,
+      "speaker": "3",
+      "utterance": "That they all have like the stop at negative five."
+    },
+    {
+      "line_number": 19,
+      "start_time": 73.52,
+      "end_time": 76.88,
+      "duration": 3.36,
+      "speaker": "1",
+      "utterance": "Okay, so this one stops at um five and negative five."
+    },
+    {
+      "line_number": 20,
+      "start_time": 77.04,
+      "end_time": 78.56,
+      "duration": 1.52,
+      "speaker": "1",
+      "utterance": "Um but we have this arrow here."
+    },
+    {
+      "line_number": 21,
+      "start_time": 78.56,
+      "end_time": 79.64,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "So what does that mean?"
+    },
+    {
+      "line_number": 22,
+      "start_time": 80.88,
+      "end_time": 81.92,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "It can keep on going."
+    },
+    {
+      "line_number": 23,
+      "start_time": 81.92,
+      "end_time": 82.44,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 24,
+      "start_time": 82.44,
+      "end_time": 84.6,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "But this one just stops at five and negative five."
+    },
+    {
+      "line_number": 25,
+      "start_time": 84.6,
+      "end_time": 85.16,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "I like that."
+    },
+    {
+      "line_number": 26,
+      "start_time": 85.16,
+      "end_time": 85.92,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "Seth, what do you notice?"
+    },
+    {
+      "line_number": 27,
+      "start_time": 87.76,
+      "end_time": 89.0,
+      "duration": 1.24,
+      "speaker": "4",
+      "utterance": "It looks like a battleship"
+    },
+    {
+      "line_number": 28,
+      "start_time": 89.08,
+      "end_time": 90.36,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "but I'm glad you brought that up."
+    },
+    {
+      "line_number": 29,
+      "start_time": 90.48,
+      "end_time": 92.52,
+      "duration": 2.04,
+      "speaker": "1",
+      "utterance": "It kind of looks like a battleship game, doesn't it?"
+    },
+    {
+      "line_number": 30,
+      "start_time": 92.8,
+      "end_time": 94.28,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "How many have played battleship before?"
+    },
+    {
+      "line_number": 31,
+      "start_time": 95.08,
+      "end_time": 97.2,
+      "duration": 2.12,
+      "speaker": "1",
+      "utterance": "If not, we're going to play something like that this week."
+    },
+    {
+      "line_number": 32,
+      "start_time": 97.2,
+      "end_time": 98.76,
+      "duration": 1.56,
+      "speaker": "1",
+      "utterance": "So you will know what it's like."
+    },
+    {
+      "line_number": 33,
+      "start_time": 98.76,
+      "end_time": 99.52,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "What else do you see?"
+    },
+    {
+      "line_number": 34,
+      "start_time": 99.56,
+      "end_time": 100.0,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "Diana."
+    },
+    {
+      "line_number": 35,
+      "start_time": 100.8,
+      "end_time": 101.8,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "It has letters."
+    },
+    {
+      "line_number": 36,
+      "start_time": 101.8,
+      "end_time": 102.88,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "And what do you see?"
+    },
+    {
+      "line_number": 37,
+      "start_time": 104.56,
+      "end_time": 105.32,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "You see a what?"
+    },
+    {
+      "line_number": 38,
+      "start_time": 106.76,
+      "end_time": 108.48,
+      "duration": 1.72,
+      "speaker": "1",
+      "utterance": "You see what letters do you see?"
+    },
+    {
+      "line_number": 39,
+      "start_time": 110.4,
+      "end_time": 115.36,
+      "duration": 4.96,
+      "speaker": "1",
+      "utterance": "You see an X and you see a Y axis."
+    },
+    {
+      "line_number": 40,
+      "start_time": 115.4,
+      "end_time": 117.4,
+      "duration": 2.0,
+      "speaker": "1",
+      "utterance": "Ooh, that kind of reminds me of something else."
+    },
+    {
+      "line_number": 41,
+      "start_time": 117.4,
+      "end_time": 119.04,
+      "duration": 1.64,
+      "speaker": "1",
+      "utterance": "What does that remind you of?"
+    },
+    {
+      "line_number": 42,
+      "start_time": 119.12,
+      "end_time": 120.28,
+      "duration": 1.16,
+      "speaker": "1",
+      "utterance": "A graph."
+    },
+    {
+      "line_number": 43,
+      "start_time": 120.28,
+      "end_time": 120.84,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 44,
+      "start_time": 120.84,
+      "end_time": 124.36,
+      "duration": 3.52,
+      "speaker": "1",
+      "utterance": "Because doesn't a graph now we've just looked at kind of this side of a graph, right?"
+    },
+    {
+      "line_number": 45,
+      "start_time": 124.4,
+      "end_time": 127.08,
+      "duration": 2.68,
+      "speaker": "1",
+      "utterance": "Where we see the X and the Y axis."
+    },
+    {
+      "line_number": 46,
+      "start_time": 127.08,
+      "end_time": 128.48,
+      "duration": 1.4,
+      "speaker": "1",
+      "utterance": "But now we get to see it all."
+    },
+    {
+      "line_number": 47,
+      "start_time": 128.88,
+      "end_time": 129.72,
+      "duration": 0.84,
+      "speaker": "1",
+      "utterance": "What else do you see?"
+    },
+    {
+      "line_number": 48,
+      "start_time": 131.2,
+      "end_time": 134.8,
+      "duration": 3.6,
+      "speaker": "1",
+      "utterance": "It looks like an Wait, we've been working with number lines a lot, right?"
+    },
+    {
+      "line_number": 49,
+      "start_time": 135.52,
+      "end_time": 137.0,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "It looks like a number line."
+    },
+    {
+      "line_number": 50,
+      "start_time": 137.52,
+      "end_time": 140.88,
+      "duration": 3.36,
+      "speaker": "1",
+      "utterance": "And what do you notice about this number line that you see?"
+    },
+    {
+      "line_number": 51,
+      "start_time": 141.92,
+      "end_time": 142.96,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "They come together."
+    },
+    {
+      "line_number": 52,
+      "start_time": 143.2,
+      "end_time": 144.64,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "Where do they come together at?"
+    },
+    {
+      "line_number": 53,
+      "start_time": 146.6,
+      "end_time": 147.36,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "And what do you think?"
+    },
+    {
+      "line_number": 54,
+      "start_time": 147.36,
+      "end_time": 148.2,
+      "duration": 0.84,
+      "speaker": "1",
+      "utterance": "I'm going to look for a hand."
+    },
+    {
+      "line_number": 55,
+      "start_time": 148.2,
+      "end_time": 151.52,
+      "duration": 3.32,
+      "speaker": "1",
+      "utterance": "What do you think the middle number would be?"
+    },
+    {
+      "line_number": 56,
+      "start_time": 151.52,
+      "end_time": 153.24,
+      "duration": 1.72,
+      "speaker": "1",
+      "utterance": "What do you think the middle number would be, Bruce?"
+    },
+    {
+      "line_number": 57,
+      "start_time": 153.8,
+      "end_time": 154.2,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "Zero."
+    },
+    {
+      "line_number": 58,
+      "start_time": 154.2,
+      "end_time": 157.12,
+      "duration": 2.92,
+      "speaker": "1",
+      "utterance": "Cuz let's see I got a one, a one, a negative one, a negative one."
+    },
+    {
+      "line_number": 59,
+      "start_time": 157.36,
+      "end_time": 158.56,
+      "duration": 1.2,
+      "speaker": "1",
+      "utterance": "And that must be zero."
+    },
+    {
+      "line_number": 60,
+      "start_time": 158.72,
+      "end_time": 170.68,
+      "duration": 11.96,
+      "speaker": "1",
+      "utterance": "So really quickly, this point right here um this point right here is called the origin."
+    },
+    {
+      "line_number": 61,
+      "start_time": 171.24,
+      "end_time": 173.4,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "And its location is you ready?"
+    },
+    {
+      "line_number": 62,
+      "start_time": 173.4,
+      "end_time": 174.28,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "It's hard location."
+    },
+    {
+      "line_number": 63,
+      "start_time": 174.8,
+      "end_time": 177.8,
+      "duration": 3.0,
+      "speaker": "1",
+      "utterance": "It's location is zero zero."
+    },
+    {
+      "line_number": 64,
+      "start_time": 178.28,
+      "end_time": 178.36,
+      "duration": 0.08,
+      "speaker": "1",
+      "utterance": "Yeah."
+    },
+    {
+      "line_number": 65,
+      "start_time": 179.28,
+      "end_time": 180.32,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "Because where is it at?"
+    },
+    {
+      "line_number": 66,
+      "start_time": 180.4,
+      "end_time": 180.92,
+      "duration": 0.52,
+      "speaker": "5",
+      "utterance": "Zero."
+    },
+    {
+      "line_number": 67,
+      "start_time": 181.2,
+      "end_time": 182.08,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "It's at zero."
+    },
+    {
+      "line_number": 68,
+      "start_time": 182.08,
+      "end_time": 182.72,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 69,
+      "start_time": 182.76,
+      "end_time": 183.24,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Yes, ma'am."
+    },
+    {
+      "line_number": 70,
+      "start_time": 183.6,
+      "end_time": 186.48,
+      "duration": 2.88,
+      "speaker": "6",
+      "utterance": "You have to add to the X axis and the Y"
+    },
+    {
+      "line_number": 71,
+      "start_time": 186.68,
+      "end_time": 188.64,
+      "duration": 1.96,
+      "speaker": "1",
+      "utterance": "Ooh, we're going to talk about that in a few minutes."
+    },
+    {
+      "line_number": 72,
+      "start_time": 188.64,
+      "end_time": 197.48,
+      "duration": 8.84,
+      "speaker": "1",
+      "utterance": "That's why I said I'm looking for some um helpers today cuz we have a nice big coordinate plane that we're going to start looking at where are some of these points on a coordinate plane."
+    },
+    {
+      "line_number": 73,
+      "start_time": 197.88,
+      "end_time": 201.16,
+      "duration": 3.28,
+      "speaker": "1",
+      "utterance": "So we have our X axis which is horizontal."
+    },
+    {
+      "line_number": 74,
+      "start_time": 201.44,
+      "end_time": 205.04,
+      "duration": 3.6,
+      "speaker": "1",
+      "utterance": "Our Y axis which is vertical."
+    },
+    {
+      "line_number": 75,
+      "start_time": 205.36,
+      "end_time": 205.76,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 76,
+      "start_time": 206.08,
+      "end_time": 208.6,
+      "duration": 2.52,
+      "speaker": "1",
+      "utterance": "And they meet at zero."
+    },
+    {
+      "line_number": 77,
+      "start_time": 208.6,
+      "end_time": 209.0,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 78,
+      "start_time": 209.08,
+      "end_time": 209.2,
+      "duration": 0.12,
+      "speaker": "5",
+      "utterance": "Zero."
+    },
+    {
+      "line_number": 79,
+      "start_time": 209.4,
+      "end_time": 210.84,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "Now I'm going to tell you something else."
+    },
+    {
+      "line_number": 80,
+      "start_time": 210.96,
+      "end_time": 217.52,
+      "duration": 6.56,
+      "speaker": "1",
+      "utterance": "If you notice how many sections do we have in a coordinate plane?"
+    },
+    {
+      "line_number": 81,
+      "start_time": 217.92,
+      "end_time": 218.4,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Kassim."
+    },
+    {
+      "line_number": 82,
+      "start_time": 218.96,
+      "end_time": 220.08,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "We have four, right?"
+    },
+    {
+      "line_number": 83,
+      "start_time": 220.08,
+      "end_time": 226.88,
+      "duration": 6.8,
+      "speaker": "1",
+      "utterance": "And we call them Now I'm going to tell you I have a hard time with this word cuz I keep wanting to say coordinate."
+    },
+    {
+      "line_number": 84,
+      "start_time": 226.96,
+      "end_time": 228.12,
+      "duration": 1.16,
+      "speaker": "1",
+      "utterance": "They're quadrants."
+    },
+    {
+      "line_number": 85,
+      "start_time": 229.04,
+      "end_time": 231.56,
+      "duration": 2.52,
+      "speaker": "1",
+      "utterance": "I see a word in there that shows me the number four."
+    },
+    {
+      "line_number": 86,
+      "start_time": 231.56,
+      "end_time": 233.76,
+      "duration": 2.2,
+      "speaker": "1",
+      "utterance": "Do you see a word in there that shows me the number four?"
+    },
+    {
+      "line_number": 87,
+      "start_time": 233.76,
+      "end_time": 234.8,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "What do you see within there?"
+    },
+    {
+      "line_number": 88,
+      "start_time": 235.04,
+      "end_time": 235.44,
+      "duration": 0.4,
+      "speaker": "7",
+      "utterance": "Quad."
+    },
+    {
+      "line_number": 89,
+      "start_time": 235.56,
+      "end_time": 236.04,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Quad."
+    },
+    {
+      "line_number": 90,
+      "start_time": 236.04,
+      "end_time": 236.6,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 91,
+      "start_time": 236.64,
+      "end_time": 240.56,
+      "duration": 3.92,
+      "speaker": "1",
+      "utterance": "So I have four quadrants on my coordinate plane."
+    },
+    {
+      "line_number": 92,
+      "start_time": 240.64,
+      "end_time": 244.48,
+      "duration": 3.84,
+      "speaker": "1",
+      "utterance": "And they're really labeled really simply."
+    },
+    {
+      "line_number": 93,
+      "start_time": 244.48,
+      "end_time": 246.92,
+      "duration": 2.44,
+      "speaker": "1",
+      "utterance": "So this is quadrant one."
+    },
+    {
+      "line_number": 94,
+      "start_time": 247.64,
+      "end_time": 253.32,
+      "duration": 5.68,
+      "speaker": "1",
+      "utterance": "And this is quadrant two, quadrant three, and quadrant four."
+    },
+    {
+      "line_number": 95,
+      "start_time": 253.36,
+      "end_time": 256.0,
+      "duration": 2.64,
+      "speaker": "1",
+      "utterance": "And Miss P was telling me something really cool the other day."
+    },
+    {
+      "line_number": 96,
+      "start_time": 256.08,
+      "end_time": 261.56,
+      "duration": 5.48,
+      "speaker": "2",
+      "utterance": "Yeah, so what I taught my kids last year was you draw a big C."
+    },
+    {
+      "line_number": 97,
+      "start_time": 261.96,
+      "end_time": 262.8,
+      "duration": 0.84,
+      "speaker": "2",
+      "utterance": "You start here."
+    },
+    {
+      "line_number": 98,
+      "start_time": 262.8,
+      "end_time": 267.48,
+      "duration": 4.68,
+      "speaker": "2",
+      "utterance": "So that's quadrant one, quadrant two, three, and four."
+    },
+    {
+      "line_number": 99,
+      "start_time": 267.48,
+      "end_time": 272.48,
+      "duration": 5.0,
+      "speaker": "2",
+      "utterance": "Now to help you remember where the first quadrant is, second, third, and fourth."
+    },
+    {
+      "line_number": 100,
+      "start_time": 272.56,
+      "end_time": 279.76,
+      "duration": 7.2,
+      "speaker": "1",
+      "utterance": "Cuz we're so Yeah, cuz we're so used to when we look at things, we look at everything in a clockwise motion, right?"
+    },
+    {
+      "line_number": 101,
+      "start_time": 280.0,
+      "end_time": 285.68,
+      "duration": 5.68,
+      "speaker": "1",
+      "utterance": "But this one happens to go in a Do you know what that's called when you go the opposite way of clockwise?"
+    },
+    {
+      "line_number": 102,
+      "start_time": 286.64,
+      "end_time": 287.64,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Counterclockwise."
+    },
+    {
+      "line_number": 103,
+      "start_time": 287.64,
+      "end_time": 288.64,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 104,
+      "start_time": 288.68,
+      "end_time": 289.16,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 105,
+      "start_time": 289.6,
+      "end_time": 292.56,
+      "duration": 2.96,
+      "speaker": "1",
+      "utterance": "And so we notice we have lots of these little points."
+    },
+    {
+      "line_number": 106,
+      "start_time": 292.56,
+      "end_time": 297.0,
+      "duration": 4.44,
+      "speaker": "1",
+      "utterance": "We're going to wind up graphing some points today or finding the location of some points today."
+    },
+    {
+      "line_number": 107,
+      "start_time": 297.4,
+      "end_time": 300.04,
+      "duration": 2.64,
+      "speaker": "1",
+      "utterance": "And I'm going to look for someone to help me out here."
+    },
+    {
+      "line_number": 108,
+      "start_time": 300.28,
+      "end_time": 302.2,
+      "duration": 1.92,
+      "speaker": "1",
+      "utterance": "On the floor you can see we have what?"
+    },
+    {
+      "line_number": 109,
+      "start_time": 304.68,
+      "end_time": 305.32,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "We have what?"
+    },
+    {
+      "line_number": 110,
+      "start_time": 306.08,
+      "end_time": 308.08,
+      "duration": 2.0,
+      "speaker": "1",
+      "utterance": "A nice big coordinate plane, right?"
+    },
+    {
+      "line_number": 111,
+      "start_time": 308.76,
+      "end_time": 310.88,
+      "duration": 2.12,
+      "speaker": "1",
+      "utterance": "And we're going to plot some points in it."
+    },
+    {
+      "line_number": 112,
+      "start_time": 310.88,
+      "end_time": 316.52,
+      "duration": 5.64,
+      "speaker": "1",
+      "utterance": "We're going to figure out where does cuz each point has a special location and we call that its ordered pair."
+    },
+    {
+      "line_number": 113,
+      "start_time": 316.52,
+      "end_time": 316.76,
+      "duration": 0.24,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 114,
+      "start_time": 316.76,
+      "end_time": 320.4,
+      "duration": 3.64,
+      "speaker": "1",
+      "utterance": "And we're going to find out where is each special location."
+    },
+    {
+      "line_number": 115,
+      "start_time": 320.72,
+      "end_time": 322.52,
+      "duration": 1.8,
+      "speaker": "1",
+      "utterance": "And so let's see."
+    },
+    {
+      "line_number": 116,
+      "start_time": 323.04,
+      "end_time": 325.6,
+      "duration": 2.56,
+      "speaker": "1",
+      "utterance": "Bruce, I want you to stand right here."
+    },
+    {
+      "line_number": 117,
+      "start_time": 328.64,
+      "end_time": 331.12,
+      "duration": 2.48,
+      "speaker": "1",
+      "utterance": "And I want you to to gently toss it onto the coordinate plane."
+    },
+    {
+      "line_number": 118,
+      "start_time": 331.2,
+      "end_time": 332.68,
+      "duration": 1.48,
+      "speaker": "2",
+      "utterance": "Make sure it lands on there."
+    },
+    {
+      "line_number": 119,
+      "start_time": 333.2,
+      "end_time": 335.04,
+      "duration": 1.84,
+      "speaker": "1",
+      "utterance": "On just gently toss it onto the coordinate plane."
+    },
+    {
+      "line_number": 120,
+      "start_time": 335.04,
+      "end_time": 336.12,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "I don't know where it's going to land."
+    },
+    {
+      "line_number": 121,
+      "start_time": 336.4,
+      "end_time": 337.68,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "Just gently toss it."
+    },
+    {
+      "line_number": 122,
+      "start_time": 341.24,
+      "end_time": 342.16,
+      "duration": 0.92,
+      "speaker": "1",
+      "utterance": "Oh, look at that."
+    },
+    {
+      "line_number": 123,
+      "start_time": 342.16,
+      "end_time": 343.52,
+      "duration": 1.36,
+      "speaker": "1",
+      "utterance": "And he landed right where?"
+    },
+    {
+      "line_number": 124,
+      "start_time": 343.76,
+      "end_time": 343.88,
+      "duration": 0.12,
+      "speaker": "5",
+      "utterance": "Zero."
+    },
+    {
+      "line_number": 125,
+      "start_time": 344.44,
+      "end_time": 345.08,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "He landed zero."
+    },
+    {
+      "line_number": 126,
+      "start_time": 345.08,
+      "end_time": 346.4,
+      "duration": 1.32,
+      "speaker": "1",
+      "utterance": "What did we call the zero?"
+    },
+    {
+      "line_number": 127,
+      "start_time": 346.52,
+      "end_time": 346.88,
+      "duration": 0.36,
+      "speaker": "5",
+      "utterance": "Origin."
+    },
+    {
+      "line_number": 128,
+      "start_time": 346.96,
+      "end_time": 348.08,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "We called it its"
+    },
+    {
+      "line_number": 129,
+      "start_time": 348.24,
+      "end_time": 348.68,
+      "duration": 0.44,
+      "speaker": "5",
+      "utterance": "Origin."
+    },
+    {
+      "line_number": 130,
+      "start_time": 348.88,
+      "end_time": 349.64,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "Origin."
+    },
+    {
+      "line_number": 131,
+      "start_time": 349.64,
+      "end_time": 350.24,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 132,
+      "start_time": 350.24,
+      "end_time": 350.84,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "Look at that."
+    },
+    {
+      "line_number": 133,
+      "start_time": 350.84,
+      "end_time": 353.44,
+      "duration": 2.6,
+      "speaker": "1",
+      "utterance": "I didn't mean for you to land right on the zero, but that's perfect."
+    },
+    {
+      "line_number": 134,
+      "start_time": 353.6,
+      "end_time": 354.2,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 135,
+      "start_time": 354.24,
+      "end_time": 356.04,
+      "duration": 1.8,
+      "speaker": "1",
+      "utterance": "Let's plot another point on here."
+    },
+    {
+      "line_number": 136,
+      "start_time": 356.12,
+      "end_time": 362.28,
+      "duration": 6.16,
+      "speaker": "1",
+      "utterance": "And we're going to find out what quadrant it's in and what point it's located at."
+    },
+    {
+      "line_number": 137,
+      "start_time": 362.56,
+      "end_time": 364.28,
+      "duration": 1.72,
+      "speaker": "1",
+      "utterance": "Brendan, stand right here."
+    },
+    {
+      "line_number": 138,
+      "start_time": 364.52,
+      "end_time": 365.8,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "And just give it a little toss."
+    },
+    {
+      "line_number": 139,
+      "start_time": 368.16,
+      "end_time": 368.76,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 140,
+      "start_time": 369.16,
+      "end_time": 370.04,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "So what do you notice?"
+    },
+    {
+      "line_number": 141,
+      "start_time": 370.04,
+      "end_time": 371.08,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "Where did his land?"
+    },
+    {
+      "line_number": 142,
+      "start_time": 372.84,
+      "end_time": 374.4,
+      "duration": 1.56,
+      "speaker": "1",
+      "utterance": "It landed on what line?"
+    },
+    {
+      "line_number": 143,
+      "start_time": 376.68,
+      "end_time": 377.36,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 144,
+      "start_time": 377.52,
+      "end_time": 380.0,
+      "duration": 2.48,
+      "speaker": "1",
+      "utterance": "So what did we call this line right here?"
+    },
+    {
+      "line_number": 145,
+      "start_time": 380.0,
+      "end_time": 381.08,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "We called this the what?"
+    },
+    {
+      "line_number": 146,
+      "start_time": 381.16,
+      "end_time": 381.88,
+      "duration": 0.72,
+      "speaker": "2",
+      "utterance": "What kind of X?"
+    },
+    {
+      "line_number": 147,
+      "start_time": 381.96,
+      "end_time": 382.4,
+      "duration": 0.44,
+      "speaker": "5",
+      "utterance": "X axis."
+    },
+    {
+      "line_number": 148,
+      "start_time": 382.64,
+      "end_time": 383.6,
+      "duration": 0.96,
+      "speaker": "1",
+      "utterance": "The X axis."
+    },
+    {
+      "line_number": 149,
+      "start_time": 383.6,
+      "end_time": 385.88,
+      "duration": 2.28,
+      "speaker": "1",
+      "utterance": "So it landed right on the X axis."
+    },
+    {
+      "line_number": 150,
+      "start_time": 386.2,
+      "end_time": 391.56,
+      "duration": 5.36,
+      "speaker": "1",
+      "utterance": "I wonder what its location is on the coordinate plane."
+    },
+    {
+      "line_number": 151,
+      "start_time": 391.56,
+      "end_time": 393.04,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "How would I figure that out?"
+    },
+    {
+      "line_number": 152,
+      "start_time": 393.2,
+      "end_time": 394.64,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "What do you think I could do?"
+    },
+    {
+      "line_number": 153,
+      "start_time": 395.84,
+      "end_time": 397.92,
+      "duration": 2.08,
+      "speaker": "1",
+      "utterance": "And I said some of you are used to playing battleship."
+    },
+    {
+      "line_number": 154,
+      "start_time": 397.92,
+      "end_time": 399.36,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "You kind of know how this works."
+    },
+    {
+      "line_number": 155,
+      "start_time": 399.36,
+      "end_time": 400.08,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "What do you think?"
+    },
+    {
+      "line_number": 156,
+      "start_time": 400.16,
+      "end_time": 407.36,
+      "duration": 7.2,
+      "speaker": "8",
+      "utterance": "You have to take it and put start at the zero and then go to where it"
+    },
+    {
+      "line_number": 157,
+      "start_time": 407.84,
+      "end_time": 408.2,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 158,
+      "start_time": 408.2,
+      "end_time": 411.0,
+      "duration": 2.8,
+      "speaker": "1",
+      "utterance": "So his point is right here."
+    },
+    {
+      "line_number": 159,
+      "start_time": 411.8,
+      "end_time": 415.32,
+      "duration": 3.52,
+      "speaker": "1",
+      "utterance": "So Brendan, she said you have to go start the zero."
+    },
+    {
+      "line_number": 160,
+      "start_time": 415.32,
+      "end_time": 416.28,
+      "duration": 0.96,
+      "speaker": "1",
+      "utterance": "So go start at the zero."
+    },
+    {
+      "line_number": 161,
+      "start_time": 417.4,
+      "end_time": 417.8,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "Yep."
+    },
+    {
+      "line_number": 162,
+      "start_time": 418.04,
+      "end_time": 419.04,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Go to you can step on it."
+    },
+    {
+      "line_number": 163,
+      "start_time": 419.12,
+      "end_time": 419.88,
+      "duration": 0.76,
+      "speaker": "2",
+      "utterance": "Step on it."
+    },
+    {
+      "line_number": 164,
+      "start_time": 422.16,
+      "end_time": 426.52,
+      "duration": 4.36,
+      "speaker": "1",
+      "utterance": "And which way are you going to travel towards the uh bean bag to the your point?"
+    },
+    {
+      "line_number": 165,
+      "start_time": 427.72,
+      "end_time": 430.12,
+      "duration": 2.4,
+      "speaker": "1",
+      "utterance": "You're going to travel, okay, towards the positive."
+    },
+    {
+      "line_number": 166,
+      "start_time": 430.32,
+      "end_time": 433.56,
+      "duration": 3.24,
+      "speaker": "1",
+      "utterance": "And you moved how many one spot."
+    },
+    {
+      "line_number": 167,
+      "start_time": 433.56,
+      "end_time": 435.0,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "Now are you going anywhere else?"
+    },
+    {
+      "line_number": 168,
+      "start_time": 435.96,
+      "end_time": 439.28,
+      "duration": 3.32,
+      "speaker": "1",
+      "utterance": "So we're going to call this point and we're going to call it B for Brendan."
+    },
+    {
+      "line_number": 169,
+      "start_time": 439.48,
+      "end_time": 443.52,
+      "duration": 4.04,
+      "speaker": "1",
+      "utterance": "We're going to call point B one zero."
+    },
+    {
+      "line_number": 170,
+      "start_time": 444.32,
+      "end_time": 446.72,
+      "duration": 2.4,
+      "speaker": "1",
+      "utterance": "Why do you think I'm calling it one zero?"
+    },
+    {
+      "line_number": 171,
+      "start_time": 447.12,
+      "end_time": 448.0,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "What do you think?"
+    },
+    {
+      "line_number": 172,
+      "start_time": 448.36,
+      "end_time": 449.8,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "What do you think the one stands for?"
+    },
+    {
+      "line_number": 173,
+      "start_time": 451.48,
+      "end_time": 453.04,
+      "duration": 1.56,
+      "speaker": "1",
+      "utterance": "It landed on the X axis."
+    },
+    {
+      "line_number": 174,
+      "start_time": 453.04,
+      "end_time": 456.28,
+      "duration": 3.24,
+      "speaker": "1",
+      "utterance": "So we went over to the number one."
+    },
+    {
+      "line_number": 175,
+      "start_time": 456.4,
+      "end_time": 459.44,
+      "duration": 3.04,
+      "speaker": "1",
+      "utterance": "Did we go up or down any on the Y axis?"
+    },
+    {
+      "line_number": 176,
+      "start_time": 459.88,
+      "end_time": 460.2,
+      "duration": 0.32,
+      "speaker": "1",
+      "utterance": "No."
+    },
+    {
+      "line_number": 177,
+      "start_time": 460.2,
+      "end_time": 461.64,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "So we're at one zero."
+    },
+    {
+      "line_number": 178,
+      "start_time": 461.64,
+      "end_time": 464.04,
+      "duration": 2.4,
+      "speaker": "1",
+      "utterance": "So that ordered pair for that point is one zero."
+    },
+    {
+      "line_number": 179,
+      "start_time": 464.2,
+      "end_time": 465.0,
+      "duration": 0.8,
+      "speaker": "1",
+      "utterance": "Pick up that bean bag."
+    },
+    {
+      "line_number": 180,
+      "start_time": 465.0,
+      "end_time": 465.84,
+      "duration": 0.84,
+      "speaker": "1",
+      "utterance": "Bring that to me."
+    },
+    {
+      "line_number": 181,
+      "start_time": 466.04,
+      "end_time": 468.88,
+      "duration": 2.84,
+      "speaker": "1",
+      "utterance": "I need someone else to help me out here."
+    },
+    {
+      "line_number": 182,
+      "start_time": 469.6,
+      "end_time": 471.68,
+      "duration": 2.08,
+      "speaker": "1",
+      "utterance": "I need someone else to help me out here."
+    },
+    {
+      "line_number": 183,
+      "start_time": 472.76,
+      "end_time": 473.28,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 184,
+      "start_time": 473.48,
+      "end_time": 474.52,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "Gently toss it."
+    },
+    {
+      "line_number": 185,
+      "start_time": 476.6,
+      "end_time": 477.84,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Oh, you guys keep throwing it on the zero."
+    },
+    {
+      "line_number": 186,
+      "start_time": 477.84,
+      "end_time": 478.48,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "Try again."
+    },
+    {
+      "line_number": 187,
+      "start_time": 482.84,
+      "end_time": 485.24,
+      "duration": 2.4,
+      "speaker": "1",
+      "utterance": "We're trying to find there we go."
+    },
+    {
+      "line_number": 188,
+      "start_time": 485.28,
+      "end_time": 487.6,
+      "duration": 2.32,
+      "speaker": "1",
+      "utterance": "And I'm going to move it so it's directly on a point."
+    },
+    {
+      "line_number": 189,
+      "start_time": 489.16,
+      "end_time": 489.72,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "Excellent."
+    },
+    {
+      "line_number": 190,
+      "start_time": 491.52,
+      "end_time": 493.2,
+      "duration": 1.68,
+      "speaker": "1",
+      "utterance": "And we have point Daily."
+    },
+    {
+      "line_number": 191,
+      "start_time": 494.56,
+      "end_time": 496.44,
+      "duration": 1.88,
+      "speaker": "1",
+      "utterance": "And where's point Daily at?"
+    },
+    {
+      "line_number": 192,
+      "start_time": 499.84,
+      "end_time": 500.84,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Where's point Daily at?"
+    },
+    {
+      "line_number": 193,
+      "start_time": 500.84,
+      "end_time": 503.16,
+      "duration": 2.32,
+      "speaker": "1",
+      "utterance": "Daily, where should you start to find out where you're at?"
+    },
+    {
+      "line_number": 194,
+      "start_time": 504.0,
+      "end_time": 505.48,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "Go well, you got to start where?"
+    },
+    {
+      "line_number": 195,
+      "start_time": 506.44,
+      "end_time": 507.76,
+      "duration": 1.32,
+      "speaker": "1",
+      "utterance": "You're going to start at the zero."
+    },
+    {
+      "line_number": 196,
+      "start_time": 507.84,
+      "end_time": 511.8,
+      "duration": 3.96,
+      "speaker": "1",
+      "utterance": "Now which way should she walk to get to her point?"
+    },
+    {
+      "line_number": 197,
+      "start_time": 512.12,
+      "end_time": 515.68,
+      "duration": 3.56,
+      "speaker": "1",
+      "utterance": "Should she walk on the X or should she walk on the Y first?"
+    },
+    {
+      "line_number": 198,
+      "start_time": 516.68,
+      "end_time": 518.92,
+      "duration": 2.24,
+      "speaker": "1",
+      "utterance": "Ooh, we got X, we got Y."
+    },
+    {
+      "line_number": 199,
+      "start_time": 518.92,
+      "end_time": 519.72,
+      "duration": 0.8,
+      "speaker": "1",
+      "utterance": "What do you think?"
+    },
+    {
+      "line_number": 200,
+      "start_time": 521.36,
+      "end_time": 522.04,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "Abby, which one?"
+    },
+    {
+      "line_number": 201,
+      "start_time": 522.8,
+      "end_time": 523.8,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Why a X?"
+    },
+    {
+      "line_number": 202,
+      "start_time": 524.12,
+      "end_time": 529.64,
+      "duration": 5.52,
+      "speaker": "9",
+      "utterance": "Because it's it's like on the on the two."
+    },
+    {
+      "line_number": 203,
+      "start_time": 529.84,
+      "end_time": 530.36,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 204,
+      "start_time": 530.56,
+      "end_time": 533.84,
+      "duration": 3.28,
+      "speaker": "1",
+      "utterance": "So what I like to remember too is that and I know you have a saying."
+    },
+    {
+      "line_number": 205,
+      "start_time": 533.84,
+      "end_time": 535.0,
+      "duration": 1.16,
+      "speaker": "1",
+      "utterance": "I always think of the alphabet."
+    },
+    {
+      "line_number": 206,
+      "start_time": 535.0,
+      "end_time": 536.8,
+      "duration": 1.8,
+      "speaker": "1",
+      "utterance": "X comes before Y, right?"
+    },
+    {
+      "line_number": 207,
+      "start_time": 536.96,
+      "end_time": 538.56,
+      "duration": 1.6,
+      "speaker": "1",
+      "utterance": "And I know I like your saying too."
+    },
+    {
+      "line_number": 208,
+      "start_time": 538.64,
+      "end_time": 539.04,
+      "duration": 0.4,
+      "speaker": "2",
+      "utterance": "And also"
+    },
+    {
+      "line_number": 209,
+      "start_time": 539.16,
+      "end_time": 543.88,
+      "duration": 4.72,
+      "speaker": "1",
+      "utterance": "So again, I taught last year you crawl before you walk."
+    },
+    {
+      "line_number": 210,
+      "start_time": 544.64,
+      "end_time": 545.36,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Make sense?"
+    },
+    {
+      "line_number": 211,
+      "start_time": 545.68,
+      "end_time": 551.56,
+      "duration": 5.88,
+      "speaker": "1",
+      "utterance": "So you have to crawl first left to right before you can stand up and walk."
+    },
+    {
+      "line_number": 212,
+      "start_time": 551.96,
+      "end_time": 552.52,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 213,
+      "start_time": 552.72,
+      "end_time": 557.4,
+      "duration": 4.68,
+      "speaker": "1",
+      "utterance": "So let's go ahead and you need to walk over two okay."
+    },
+    {
+      "line_number": 214,
+      "start_time": 558.2,
+      "end_time": 559.6,
+      "duration": 1.4,
+      "speaker": "1",
+      "utterance": "So she walked over two."
+    },
+    {
+      "line_number": 215,
+      "start_time": 560.4,
+      "end_time": 564.4,
+      "duration": 4.0,
+      "speaker": "1",
+      "utterance": "So her first point her first part of the ordered pair is positive two."
+    },
+    {
+      "line_number": 216,
+      "start_time": 564.76,
+      "end_time": 566.72,
+      "duration": 1.96,
+      "speaker": "1",
+      "utterance": "And now where are you going to get to the bean bag?"
+    },
+    {
+      "line_number": 217,
+      "start_time": 567.72,
+      "end_time": 568.16,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 218,
+      "start_time": 568.16,
+      "end_time": 568.84,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "And how many"
+    },
+    {
+      "line_number": 219,
+      "start_time": 569.36,
+      "end_time": 569.64,
+      "duration": 0.28,
+      "speaker": "9",
+      "utterance": "Two."
+    },
+    {
+      "line_number": 220,
+      "start_time": 569.84,
+      "end_time": 570.32,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Two."
+    },
+    {
+      "line_number": 221,
+      "start_time": 570.36,
+      "end_time": 571.48,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "So her point"
+    },
+    {
+      "line_number": 222,
+      "start_time": 571.56,
+      "end_time": 571.92,
+      "duration": 0.36,
+      "speaker": "9",
+      "utterance": "So I"
+    },
+    {
+      "line_number": 223,
+      "start_time": 572.32,
+      "end_time": 574.88,
+      "duration": 2.56,
+      "speaker": "1",
+      "utterance": "is at two two."
+    },
+    {
+      "line_number": 224,
+      "start_time": 575.0,
+      "end_time": 578.36,
+      "duration": 3.36,
+      "speaker": "1",
+      "utterance": "So the X it's at two, the Y it's at two."
+    },
+    {
+      "line_number": 225,
+      "start_time": 578.36,
+      "end_time": 578.84,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 226,
+      "start_time": 578.84,
+      "end_time": 579.76,
+      "duration": 0.92,
+      "speaker": "1",
+      "utterance": "Give me that bean bag."
+    },
+    {
+      "line_number": 227,
+      "start_time": 580.4,
+      "end_time": 581.24,
+      "duration": 0.84,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 228,
+      "start_time": 581.28,
+      "end_time": 582.0,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Let's have Ethan."
+    },
+    {
+      "line_number": 229,
+      "start_time": 582.0,
+      "end_time": 582.36,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "Come on."
+    },
+    {
+      "line_number": 230,
+      "start_time": 584.24,
+      "end_time": 589.24,
+      "duration": 5.0,
+      "speaker": "1",
+      "utterance": "Oh, what what um while Ethan's getting ready to throw what um quadrant was it in?"
+    },
+    {
+      "line_number": 231,
+      "start_time": 590.08,
+      "end_time": 592.44,
+      "duration": 2.36,
+      "speaker": "1",
+      "utterance": "It was in the first quadrant two two."
+    },
+    {
+      "line_number": 232,
+      "start_time": 594.72,
+      "end_time": 595.24,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 233,
+      "start_time": 595.64,
+      "end_time": 596.32,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "All right, Ethan."
+    },
+    {
+      "line_number": 234,
+      "start_time": 597.64,
+      "end_time": 598.36,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Excellent."
+    },
+    {
+      "line_number": 235,
+      "start_time": 598.36,
+      "end_time": 598.88,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "I love it."
+    },
+    {
+      "line_number": 236,
+      "start_time": 598.88,
+      "end_time": 600.24,
+      "duration": 1.36,
+      "speaker": "1",
+      "utterance": "He threw it in what quadrant?"
+    },
+    {
+      "line_number": 237,
+      "start_time": 601.28,
+      "end_time": 601.72,
+      "duration": 0.44,
+      "speaker": "10",
+      "utterance": "Three."
+    },
+    {
+      "line_number": 238,
+      "start_time": 601.96,
+      "end_time": 602.52,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "In three."
+    },
+    {
+      "line_number": 239,
+      "start_time": 602.52,
+      "end_time": 606.24,
+      "duration": 3.72,
+      "speaker": "1",
+      "utterance": "Cuz we got to go around and say one, two, three."
+    },
+    {
+      "line_number": 240,
+      "start_time": 606.24,
+      "end_time": 607.48,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 241,
+      "start_time": 607.96,
+      "end_time": 613.28,
+      "duration": 5.32,
+      "speaker": "1",
+      "utterance": "And he's going to start at And he's going to walk which way first on the X or the Y?"
+    },
+    {
+      "line_number": 242,
+      "start_time": 614.4,
+      "end_time": 614.8,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "The X."
+    },
+    {
+      "line_number": 243,
+      "start_time": 614.8,
+      "end_time": 615.84,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "So where are you going?"
+    },
+    {
+      "line_number": 244,
+      "start_time": 617.32,
+      "end_time": 619.12,
+      "duration": 1.8,
+      "speaker": "1",
+      "utterance": "This is point E for Ethan."
+    },
+    {
+      "line_number": 245,
+      "start_time": 619.16,
+      "end_time": 623.96,
+      "duration": 4.8,
+      "speaker": "1",
+      "utterance": "He went to the to negative one."
+    },
+    {
+      "line_number": 246,
+      "start_time": 624.2,
+      "end_time": 624.6,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 247,
+      "start_time": 624.6,
+      "end_time": 629.04,
+      "duration": 4.44,
+      "speaker": "1",
+      "utterance": "And now you're going to go two"
+    },
+    {
+      "line_number": 248,
+      "start_time": 629.4,
+      "end_time": 629.92,
+      "duration": 0.52,
+      "speaker": "12",
+      "utterance": "What is that?"
+    },
+    {
+      "line_number": 249,
+      "start_time": 630.04,
+      "end_time": 630.36,
+      "duration": 0.32,
+      "speaker": "13",
+      "utterance": "Negative one."
+    },
+    {
+      "line_number": 250,
+      "start_time": 631.2,
+      "end_time": 632.28,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "It's negative one."
+    },
+    {
+      "line_number": 251,
+      "start_time": 632.36,
+      "end_time": 637.44,
+      "duration": 5.08,
+      "speaker": "1",
+      "utterance": "So he went on the X axis to negative one and then down the Y to negative one."
+    },
+    {
+      "line_number": 252,
+      "start_time": 637.52,
+      "end_time": 642.88,
+      "duration": 5.36,
+      "speaker": "1",
+      "utterance": "So his point is located at negative one negative one."
+    },
+    {
+      "line_number": 253,
+      "start_time": 642.88,
+      "end_time": 643.52,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 254,
+      "start_time": 643.52,
+      "end_time": 644.56,
+      "duration": 1.04,
+      "speaker": "1",
+      "utterance": "We're going to do one more."
+    },
+    {
+      "line_number": 255,
+      "start_time": 644.56,
+      "end_time": 650.16,
+      "duration": 5.6,
+      "speaker": "1",
+      "utterance": "I want to see if someone can get it in the fourth quadrant, the fourth quadrant."
+    },
+    {
+      "line_number": 256,
+      "start_time": 651.48,
+      "end_time": 652.8,
+      "duration": 1.32,
+      "speaker": "1",
+      "utterance": "You did go already."
+    },
+    {
+      "line_number": 257,
+      "start_time": 653.08,
+      "end_time": 653.84,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 258,
+      "start_time": 654.32,
+      "end_time": 655.72,
+      "duration": 1.4,
+      "speaker": "1",
+      "utterance": "Seth, I'm going to let Seth do it."
+    },
+    {
+      "line_number": 259,
+      "start_time": 656.2,
+      "end_time": 656.72,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "That's all right."
+    },
+    {
+      "line_number": 260,
+      "start_time": 656.72,
+      "end_time": 657.8,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "I got we got other things to get to."
+    },
+    {
+      "line_number": 261,
+      "start_time": 657.8,
+      "end_time": 658.24,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 262,
+      "start_time": 658.28,
+      "end_time": 660.28,
+      "duration": 2.0,
+      "speaker": "1",
+      "utterance": "Try to get in the fourth quadrant."
+    },
+    {
+      "line_number": 263,
+      "start_time": 660.6,
+      "end_time": 661.36,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "Did you already do one?"
+    },
+    {
+      "line_number": 264,
+      "start_time": 662.08,
+      "end_time": 662.48,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 265,
+      "start_time": 662.56,
+      "end_time": 663.16,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "That was Bruce."
+    },
+    {
+      "line_number": 266,
+      "start_time": 664.6,
+      "end_time": 665.6,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "Excellent."
+    },
+    {
+      "line_number": 267,
+      "start_time": 666.28,
+      "end_time": 667.8,
+      "duration": 1.52,
+      "speaker": "1",
+      "utterance": "Oh, you got to walk it first, right?"
+    },
+    {
+      "line_number": 268,
+      "start_time": 668.2,
+      "end_time": 669.32,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "Oh, that's right."
+    },
+    {
+      "line_number": 269,
+      "start_time": 669.52,
+      "end_time": 670.4,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "So let's see."
+    },
+    {
+      "line_number": 270,
+      "start_time": 670.4,
+      "end_time": 672.64,
+      "duration": 2.24,
+      "speaker": "1",
+      "utterance": "He threw it in the fourth quadrant."
+    },
+    {
+      "line_number": 271,
+      "start_time": 674.2,
+      "end_time": 679.8,
+      "duration": 5.6,
+      "speaker": "1",
+      "utterance": "And I want you to walk which way first?"
+    },
+    {
+      "line_number": 272,
+      "start_time": 680.6,
+      "end_time": 681.88,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "Okay, we're going to walk the X first."
+    },
+    {
+      "line_number": 273,
+      "start_time": 681.88,
+      "end_time": 684.04,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "So this is point S for Seth."
+    },
+    {
+      "line_number": 274,
+      "start_time": 684.44,
+      "end_time": 685.64,
+      "duration": 1.2,
+      "speaker": "1",
+      "utterance": "And you're going to the what?"
+    },
+    {
+      "line_number": 275,
+      "start_time": 686.4,
+      "end_time": 686.96,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "Two."
+    },
+    {
+      "line_number": 276,
+      "start_time": 689.36,
+      "end_time": 689.84,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Bless you."
+    },
+    {
+      "line_number": 277,
+      "start_time": 693.28,
+      "end_time": 694.28,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "To which one?"
+    },
+    {
+      "line_number": 278,
+      "start_time": 695.48,
+      "end_time": 696.4,
+      "duration": 0.92,
+      "speaker": "1",
+      "utterance": "Negative two."
+    },
+    {
+      "line_number": 279,
+      "start_time": 696.4,
+      "end_time": 698.92,
+      "duration": 2.52,
+      "speaker": "1",
+      "utterance": "So he went to two negative two."
+    },
+    {
+      "line_number": 280,
+      "start_time": 698.92,
+      "end_time": 699.56,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "I love it."
+    },
+    {
+      "line_number": 281,
+      "start_time": 699.56,
+      "end_time": 701.32,
+      "duration": 1.76,
+      "speaker": "1",
+      "utterance": "Hand me that bean bag really quickly."
+    },
+    {
+      "line_number": 282,
+      "start_time": 703.28,
+      "end_time": 703.64,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "It is."
+    },
+    {
+      "line_number": 283,
+      "start_time": 703.64,
+      "end_time": 710.48,
+      "duration": 6.84,
+      "speaker": "1",
+      "utterance": "So he went over positive two and then he came down two negative two."
+    },
+    {
+      "line_number": 284,
+      "start_time": 710.48,
+      "end_time": 712.6,
+      "duration": 2.12,
+      "speaker": "1",
+      "utterance": "So that's where his point is."
+    },
+    {
+      "line_number": 285,
+      "start_time": 712.76,
+      "end_time": 714.84,
+      "duration": 2.08,
+      "speaker": "1",
+      "utterance": "It was at two negative two."
+    },
+    {
+      "line_number": 286,
+      "start_time": 715.72,
+      "end_time": 716.96,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Did we get one in quadrant two?"
+    },
+    {
+      "line_number": 287,
+      "start_time": 717.92,
+      "end_time": 718.88,
+      "duration": 0.96,
+      "speaker": "1",
+      "utterance": "We didn get one in quadrant two."
+    },
+    {
+      "line_number": 288,
+      "start_time": 718.88,
+      "end_time": 719.04,
+      "duration": 0.16,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 289,
+      "start_time": 719.08,
+      "end_time": 720.24,
+      "duration": 1.16,
+      "speaker": "1",
+      "utterance": "we need one in quadrant two."
+    },
+    {
+      "line_number": 290,
+      "start_time": 720.6,
+      "end_time": 721.28,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "All right, come on."
+    },
+    {
+      "line_number": 291,
+      "start_time": 721.76,
+      "end_time": 722.36,
+      "duration": 0.6,
+      "speaker": "1",
+      "utterance": "Last one."
+    },
+    {
+      "line_number": 292,
+      "start_time": 726.8,
+      "end_time": 727.56,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "It happens."
+    },
+    {
+      "line_number": 293,
+      "start_time": 727.96,
+      "end_time": 728.52,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 294,
+      "start_time": 728.52,
+      "end_time": 729.0,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Very good."
+    },
+    {
+      "line_number": 295,
+      "start_time": 729.0,
+      "end_time": 729.8,
+      "duration": 0.8,
+      "speaker": "1",
+      "utterance": "So where are we starting?"
+    },
+    {
+      "line_number": 296,
+      "start_time": 729.8,
+      "end_time": 732.0,
+      "duration": 2.2,
+      "speaker": "1",
+      "utterance": "This is point H for Hope."
+    },
+    {
+      "line_number": 297,
+      "start_time": 732.84,
+      "end_time": 734.44,
+      "duration": 1.6,
+      "speaker": "1",
+      "utterance": "Oh, let's go back to zero."
+    },
+    {
+      "line_number": 298,
+      "start_time": 734.88,
+      "end_time": 736.08,
+      "duration": 1.2,
+      "speaker": "1",
+      "utterance": "So we're always going to what?"
+    },
+    {
+      "line_number": 299,
+      "start_time": 736.12,
+      "end_time": 737.76,
+      "duration": 1.64,
+      "speaker": "1",
+      "utterance": "Crawl before we walk, right?"
+    },
+    {
+      "line_number": 300,
+      "start_time": 737.8,
+      "end_time": 739.32,
+      "duration": 1.52,
+      "speaker": "1",
+      "utterance": "So we're going to go over to what?"
+    },
+    {
+      "line_number": 301,
+      "start_time": 743.56,
+      "end_time": 744.76,
+      "duration": 1.2,
+      "speaker": "1",
+      "utterance": "So what point are you at?"
+    },
+    {
+      "line_number": 302,
+      "start_time": 744.76,
+      "end_time": 746.76,
+      "duration": 2.0,
+      "speaker": "1",
+      "utterance": "Negative negative one."
+    },
+    {
+      "line_number": 303,
+      "start_time": 747.04,
+      "end_time": 748.04,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "And then you're going to go"
+    },
+    {
+      "line_number": 304,
+      "start_time": 749.16,
+      "end_time": 750.6,
+      "duration": 1.44,
+      "speaker": "14",
+      "utterance": "The Y axis to one."
+    },
+    {
+      "line_number": 305,
+      "start_time": 750.76,
+      "end_time": 751.96,
+      "duration": 1.2,
+      "speaker": "1",
+      "utterance": "To positive one."
+    },
+    {
+      "line_number": 306,
+      "start_time": 752.0,
+      "end_time": 754.6,
+      "duration": 2.6,
+      "speaker": "1",
+      "utterance": "So she's at negative one positive one."
+    },
+    {
+      "line_number": 307,
+      "start_time": 754.8,
+      "end_time": 755.56,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "Thank you, ma'am."
+    },
+    {
+      "line_number": 308,
+      "start_time": 756.56,
+      "end_time": 758.72,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "Right now looking at their points."
+    },
+    {
+      "line_number": 309,
+      "start_time": 759.12,
+      "end_time": 773.76,
+      "duration": 14.64,
+      "speaker": "1",
+      "utterance": "So we had Bruce at one zero, we had Diana at two two, Ethan was at negative one negative one, we had Seth at two negative two, and we have Hope at negative one one."
+    },
+    {
+      "line_number": 310,
+      "start_time": 774.8,
+      "end_time": 775.96,
+      "duration": 1.16,
+      "speaker": "1",
+      "utterance": "Daily, I'm sorry."
+    },
+    {
+      "line_number": 311,
+      "start_time": 776.0,
+      "end_time": 776.24,
+      "duration": 0.24,
+      "speaker": "1",
+      "utterance": "Sorry."
+    },
+    {
+      "line_number": 312,
+      "start_time": 776.24,
+      "end_time": 776.76,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "Thank you."
+    },
+    {
+      "line_number": 313,
+      "start_time": 777.08,
+      "end_time": 782.28,
+      "duration": 5.2,
+      "speaker": "1",
+      "utterance": "Um what do you notice about the points in each quadrant?"
+    },
+    {
+      "line_number": 314,
+      "start_time": 782.28,
+      "end_time": 783.8,
+      "duration": 1.52,
+      "speaker": "1",
+      "utterance": "I want you guys to talk to your partner."
+    },
+    {
+      "line_number": 315,
+      "start_time": 783.8,
+      "end_time": 786.32,
+      "duration": 2.52,
+      "speaker": "1",
+      "utterance": "What do you notice about the points in each quadrant?"
+    },
+    {
+      "line_number": 316,
+      "start_time": 786.52,
+      "end_time": 788.32,
+      "duration": 1.8,
+      "speaker": "1",
+      "utterance": "So let's look at this really quickly."
+    },
+    {
+      "line_number": 317,
+      "start_time": 790.88,
+      "end_time": 795.8,
+      "duration": 4.92,
+      "speaker": "1",
+      "utterance": "And I think maybe if we look at quadrant one."
+    },
+    {
+      "line_number": 318,
+      "start_time": 796.16,
+      "end_time": 803.16,
+      "duration": 7.0,
+      "speaker": "1",
+      "utterance": "Now we said that we have to walk across the we have to crawl across the X before we walk up the Y, right?"
+    },
+    {
+      "line_number": 319,
+      "start_time": 803.36,
+      "end_time": 806.48,
+      "duration": 3.12,
+      "speaker": "1",
+      "utterance": "And so what kind of numbers are we looking at in quadrant one?"
+    },
+    {
+      "line_number": 320,
+      "start_time": 806.64,
+      "end_time": 809.08,
+      "duration": 2.44,
+      "speaker": "1",
+      "utterance": "We're working with positives and"
+    },
+    {
+      "line_number": 321,
+      "start_time": 809.28,
+      "end_time": 810.04,
+      "duration": 0.76,
+      "speaker": "5",
+      "utterance": "Positives."
+    },
+    {
+      "line_number": 322,
+      "start_time": 810.4,
+      "end_time": 811.68,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "Oh, but look at these numbers."
+    },
+    {
+      "line_number": 323,
+      "start_time": 811.68,
+      "end_time": 812.44,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "These are what?"
+    },
+    {
+      "line_number": 324,
+      "start_time": 812.92,
+      "end_time": 813.08,
+      "duration": 0.16,
+      "speaker": "5",
+      "utterance": "They're"
+    },
+    {
+      "line_number": 325,
+      "start_time": 813.96,
+      "end_time": 815.2,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Look at these numbers one more time."
+    },
+    {
+      "line_number": 326,
+      "start_time": 815.44,
+      "end_time": 816.56,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "They're positive."
+    },
+    {
+      "line_number": 327,
+      "start_time": 816.6,
+      "end_time": 822.08,
+      "duration": 5.48,
+      "speaker": "1",
+      "utterance": "So we're working with positive positive numbers in our first quadrant."
+    },
+    {
+      "line_number": 328,
+      "start_time": 822.28,
+      "end_time": 824.12,
+      "duration": 1.84,
+      "speaker": "1",
+      "utterance": "What about in the second quadrant?"
+    },
+    {
+      "line_number": 329,
+      "start_time": 824.2,
+      "end_time": 825.24,
+      "duration": 1.04,
+      "speaker": "5",
+      "utterance": "Positive and negative."
+    },
+    {
+      "line_number": 330,
+      "start_time": 825.44,
+      "end_time": 826.08,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "Well, let's see."
+    },
+    {
+      "line_number": 331,
+      "start_time": 826.08,
+      "end_time": 827.2,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "Where do I go first?"
+    },
+    {
+      "line_number": 332,
+      "start_time": 827.76,
+      "end_time": 829.72,
+      "duration": 1.96,
+      "speaker": "1",
+      "utterance": "Negative and then what?"
+    },
+    {
+      "line_number": 333,
+      "start_time": 829.8,
+      "end_time": 830.36,
+      "duration": 0.56,
+      "speaker": "5",
+      "utterance": "Positive."
+    },
+    {
+      "line_number": 334,
+      "start_time": 830.6,
+      "end_time": 831.32,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Positive."
+    },
+    {
+      "line_number": 335,
+      "start_time": 831.32,
+      "end_time": 834.76,
+      "duration": 3.44,
+      "speaker": "1",
+      "utterance": "So I have negative then positive numbers."
+    },
+    {
+      "line_number": 336,
+      "start_time": 835.88,
+      "end_time": 841.52,
+      "duration": 5.64,
+      "speaker": "1",
+      "utterance": "When I go to quadrant three, Ethan, I go negative negative."
+    },
+    {
+      "line_number": 337,
+      "start_time": 843.36,
+      "end_time": 845.0,
+      "duration": 1.64,
+      "speaker": "1",
+      "utterance": "Do you think this is going to happen every time?"
+    },
+    {
+      "line_number": 338,
+      "start_time": 846.2,
+      "end_time": 846.92,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "Oh, let's see."
+    },
+    {
+      "line_number": 339,
+      "start_time": 847.08,
+      "end_time": 853.44,
+      "duration": 6.36,
+      "speaker": "1",
+      "utterance": "And then when I go to the fourth quadrant, I go positive then negative."
+    },
+    {
+      "line_number": 340,
+      "start_time": 853.48,
+      "end_time": 857.32,
+      "duration": 3.84,
+      "speaker": "1",
+      "utterance": "So we're going to see if this happens all the time, okay?"
+    },
+    {
+      "line_number": 341,
+      "start_time": 857.88,
+      "end_time": 865.16,
+      "duration": 7.28,
+      "speaker": "1",
+      "utterance": "At your table, you're going to need one just one, one of the qua uh coordinate planes."
+    },
+    {
+      "line_number": 342,
+      "start_time": 865.36,
+      "end_time": 866.36,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "You can put the others back."
+    },
+    {
+      "line_number": 343,
+      "start_time": 866.36,
+      "end_time": 867.6,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "So per partner, sorry."
+    },
+    {
+      "line_number": 344,
+      "start_time": 867.76,
+      "end_time": 870.2,
+      "duration": 2.44,
+      "speaker": "1",
+      "utterance": "You're going to need with your partner one coordinate plane."
+    },
+    {
+      "line_number": 345,
+      "start_time": 871.04,
+      "end_time": 874.76,
+      "duration": 3.72,
+      "speaker": "1",
+      "utterance": "You're going to need one cup that has little pom poms in it."
+    },
+    {
+      "line_number": 346,
+      "start_time": 875.16,
+      "end_time": 877.28,
+      "duration": 2.12,
+      "speaker": "1",
+      "utterance": "And then I'm going to give you a recording sheet."
+    },
+    {
+      "line_number": 347,
+      "start_time": 877.36,
+      "end_time": 879.24,
+      "duration": 1.88,
+      "speaker": "1",
+      "utterance": "But before you start, I'm going to tell you what you're going to do."
+    },
+    {
+      "line_number": 348,
+      "start_time": 881.96,
+      "end_time": 882.32,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "Hm?"
+    },
+    {
+      "line_number": 349,
+      "start_time": 884.12,
+      "end_time": 884.56,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 350,
+      "start_time": 885.48,
+      "end_time": 886.72,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Seth, thank you."
+    },
+    {
+      "line_number": 351,
+      "start_time": 887.16,
+      "end_time": 887.88,
+      "duration": 0.72,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 352,
+      "start_time": 888.16,
+      "end_time": 890.8,
+      "duration": 2.64,
+      "speaker": "1",
+      "utterance": "I need all eyes on me real quick so I can show you what you can do."
+    },
+    {
+      "line_number": 353,
+      "start_time": 891.04,
+      "end_time": 898.16,
+      "duration": 7.12,
+      "speaker": "1",
+      "utterance": "With your partner, with your partner, you have four pom poms and these are going to become your points on the coordinate plane, okay?"
+    },
+    {
+      "line_number": 354,
+      "start_time": 898.4,
+      "end_time": 904.6,
+      "duration": 6.2,
+      "speaker": "1",
+      "utterance": "So partner one number one is going to just drop their points on the plane."
+    },
+    {
+      "line_number": 355,
+      "start_time": 904.6,
+      "end_time": 906.76,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "Now if it doesn't go on the plane, you're going to pick them up, okay?"
+    },
+    {
+      "line_number": 356,
+      "start_time": 907.24,
+      "end_time": 911.2,
+      "duration": 3.96,
+      "speaker": "1",
+      "utterance": "Partner two, their job is to write down two things."
+    },
+    {
+      "line_number": 357,
+      "start_time": 911.88,
+      "end_time": 915.16,
+      "duration": 3.28,
+      "speaker": "1",
+      "utterance": "What quadrant did that point fall in?"
+    },
+    {
+      "line_number": 358,
+      "start_time": 916.12,
+      "end_time": 918.8,
+      "duration": 2.68,
+      "speaker": "1",
+      "utterance": "And you're going to have to write down the ordered pair."
+    },
+    {
+      "line_number": 359,
+      "start_time": 918.8,
+      "end_time": 921.16,
+      "duration": 2.36,
+      "speaker": "1",
+      "utterance": "So how do I get to that point?"
+    },
+    {
+      "line_number": 360,
+      "start_time": 921.6,
+      "end_time": 922.24,
+      "duration": 0.64,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 361,
+      "start_time": 922.84,
+      "end_time": 929.04,
+      "duration": 6.2,
+      "speaker": "1",
+      "utterance": "Then you're going to switch and partner two will get to drop the pom poms and partner one will they just need one per group."
+    },
+    {
+      "line_number": 362,
+      "start_time": 929.12,
+      "end_time": 929.48,
+      "duration": 0.36,
+      "speaker": "15",
+      "utterance": "I'm going to do"
+    },
+    {
+      "line_number": 363,
+      "start_time": 930.2,
+      "end_time": 930.52,
+      "duration": 0.32,
+      "speaker": "2",
+      "utterance": "What?"
+    },
+    {
+      "line_number": 364,
+      "start_time": 930.6,
+      "end_time": 931.08,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Yes, ma'am."
+    },
+    {
+      "line_number": 365,
+      "start_time": 933.0,
+      "end_time": 933.68,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "You may."
+    },
+    {
+      "line_number": 366,
+      "start_time": 933.68,
+      "end_time": 934.92,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "That's a great question."
+    },
+    {
+      "line_number": 367,
+      "start_time": 934.96,
+      "end_time": 939.2,
+      "duration": 4.24,
+      "speaker": "1",
+      "utterance": "Abby asked if she can use Expo markers to mark those points once they fall."
+    },
+    {
+      "line_number": 368,
+      "start_time": 939.2,
+      "end_time": 940.12,
+      "duration": 0.92,
+      "speaker": "1",
+      "utterance": "You may."
+    },
+    {
+      "line_number": 369,
+      "start_time": 940.48,
+      "end_time": 945.8,
+      "duration": 5.32,
+      "speaker": "1",
+      "utterance": "And I'm going to give you guys probably about five minutes, six minutes to work on this."
+    },
+    {
+      "line_number": 370,
+      "start_time": 971.2,
+      "end_time": 973.4,
+      "duration": 2.2,
+      "speaker": "1",
+      "utterance": "So first, what quadrant is this located in?"
+    },
+    {
+      "line_number": 371,
+      "start_time": 973.76,
+      "end_time": 975.04,
+      "duration": 1.28,
+      "speaker": "1",
+      "utterance": "Is it in the second?"
+    },
+    {
+      "line_number": 372,
+      "start_time": 975.04,
+      "end_time": 975.92,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "So we're going to write that down."
+    },
+    {
+      "line_number": 373,
+      "start_time": 976.76,
+      "end_time": 977.84,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "You got to make sure she's right, Seth."
+    },
+    {
+      "line_number": 374,
+      "start_time": 978.08,
+      "end_time": 978.52,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "She right?"
+    },
+    {
+      "line_number": 375,
+      "start_time": 979.08,
+      "end_time": 979.28,
+      "duration": 0.2,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 376,
+      "start_time": 979.88,
+      "end_time": 982.04,
+      "duration": 2.16,
+      "speaker": "1",
+      "utterance": "And then how are you going to do the ordered pair?"
+    },
+    {
+      "line_number": 377,
+      "start_time": 982.04,
+      "end_time": 982.52,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "What are you going to do?"
+    },
+    {
+      "line_number": 378,
+      "start_time": 984.84,
+      "end_time": 985.56,
+      "duration": 0.72,
+      "speaker": "2",
+      "utterance": "Go what is that at?"
+    },
+    {
+      "line_number": 379,
+      "start_time": 985.64,
+      "end_time": 986.48,
+      "duration": 0.84,
+      "speaker": "15",
+      "utterance": "Location"
+    },
+    {
+      "line_number": 380,
+      "start_time": 986.72,
+      "end_time": 987.28,
+      "duration": 0.56,
+      "speaker": "1",
+      "utterance": "It's what?"
+    },
+    {
+      "line_number": 381,
+      "start_time": 988.2,
+      "end_time": 989.04,
+      "duration": 0.84,
+      "speaker": "1",
+      "utterance": "Negative four."
+    },
+    {
+      "line_number": 382,
+      "start_time": 993.04,
+      "end_time": 994.04,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "So your point is what?"
+    },
+    {
+      "line_number": 383,
+      "start_time": 994.24,
+      "end_time": 995.2,
+      "duration": 0.96,
+      "speaker": "1",
+      "utterance": "The location is what?"
+    },
+    {
+      "line_number": 384,
+      "start_time": 997.76,
+      "end_time": 998.56,
+      "duration": 0.8,
+      "speaker": "1",
+      "utterance": "Negative four."
+    },
+    {
+      "line_number": 385,
+      "start_time": 999.84,
+      "end_time": 1000.6,
+      "duration": 0.76,
+      "speaker": "15",
+      "utterance": "Start at the positive"
+    },
+    {
+      "line_number": 386,
+      "start_time": 1000.88,
+      "end_time": 1001.32,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "Right."
+    },
+    {
+      "line_number": 387,
+      "start_time": 1001.56,
+      "end_time": 1003.0,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "And you separate that with a comma."
+    },
+    {
+      "line_number": 388,
+      "start_time": 1008.56,
+      "end_time": 1009.08,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "Almost."
+    },
+    {
+      "line_number": 389,
+      "start_time": 1009.28,
+      "end_time": 1010.0,
+      "duration": 0.72,
+      "speaker": "15",
+      "utterance": "So it is"
+    },
+    {
+      "line_number": 390,
+      "start_time": 1010.08,
+      "end_time": 1010.4,
+      "duration": 0.32,
+      "speaker": "1",
+      "utterance": "All right."
+    },
+    {
+      "line_number": 391,
+      "start_time": 1013.32,
+      "end_time": 1016.16,
+      "duration": 2.84,
+      "speaker": "1",
+      "utterance": "Okay, so drop it on the two one."
+    },
+    {
+      "line_number": 392,
+      "start_time": 1016.92,
+      "end_time": 1017.68,
+      "duration": 0.76,
+      "speaker": "1",
+      "utterance": "Yep, drop it on there."
+    },
+    {
+      "line_number": 393,
+      "start_time": 1017.68,
+      "end_time": 1020.92,
+      "duration": 3.24,
+      "speaker": "1",
+      "utterance": "So then Jamari has to tell me and he has to write down but you're going to write it on here."
+    },
+    {
+      "line_number": 394,
+      "start_time": 1021.32,
+      "end_time": 1022.32,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "So this is your recording page."
+    },
+    {
+      "line_number": 395,
+      "start_time": 1022.32,
+      "end_time": 1022.72,
+      "duration": 0.4,
+      "speaker": "1",
+      "utterance": "That's okay."
+    },
+    {
+      "line_number": 396,
+      "start_time": 1023.04,
+      "end_time": 1025.44,
+      "duration": 2.4,
+      "speaker": "1",
+      "utterance": "So you're going to write down what quadrant is it located in?"
+    },
+    {
+      "line_number": 397,
+      "start_time": 1026.0,
+      "end_time": 1027.44,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "So what quadrant is it located in?"
+    },
+    {
+      "line_number": 398,
+      "start_time": 1027.48,
+      "end_time": 1028.92,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "Is it the first, second, third, or fourth?"
+    },
+    {
+      "line_number": 399,
+      "start_time": 1029.84,
+      "end_time": 1030.36,
+      "duration": 0.52,
+      "speaker": "1",
+      "utterance": "The fourth."
+    },
+    {
+      "line_number": 400,
+      "start_time": 1030.36,
+      "end_time": 1030.72,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "Okay."
+    },
+    {
+      "line_number": 401,
+      "start_time": 1031.08,
+      "end_time": 1035.88,
+      "duration": 4.8,
+      "speaker": "1",
+      "utterance": "And And where's it located?"
+    },
+    {
+      "line_number": 402,
+      "start_time": 1037.6,
+      "end_time": 1038.04,
+      "duration": 0.44,
+      "speaker": "1",
+      "utterance": "Over."
+    },
+    {
+      "line_number": 403,
+      "start_time": 1038.24,
+      "end_time": 1039.72,
+      "duration": 1.48,
+      "speaker": "1",
+      "utterance": "So it's three what?"
+    },
+    {
+      "line_number": 404,
+      "start_time": 1041.96,
+      "end_time": 1042.84,
+      "duration": 0.88,
+      "speaker": "1",
+      "utterance": "Positive three."
+    },
+    {
+      "line_number": 405,
+      "start_time": 1043.48,
+      "end_time": 1044.48,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "And then where did you go?"
+    },
+    {
+      "line_number": 406,
+      "start_time": 1047.88,
+      "end_time": 1049.12,
+      "duration": 1.24,
+      "speaker": "1",
+      "utterance": "Three and two."
+    },
+    {
+      "line_number": 407,
+      "start_time": 1049.28,
+      "end_time": 1050.96,
+      "duration": 1.68,
+      "speaker": "1",
+      "utterance": "So ooh, I'm too let's look at that."
+    },
+    {
+      "line_number": 408,
+      "start_time": 1050.96,
+      "end_time": 1052.08,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "So it's at three, right?"
+    },
+    {
+      "line_number": 409,
+      "start_time": 1052.08,
+      "end_time": 1056.16,
+      "duration": 4.08,
+      "speaker": "1",
+      "utterance": "So we go across the X axis and then we're going to go up or down the Y and roll them again."
+    },
+    {
+      "line_number": 410,
+      "start_time": 1056.28,
+      "end_time": 1058.84,
+      "duration": 2.56,
+      "speaker": "1",
+      "utterance": "So this is located right here, right?"
+    },
+    {
+      "line_number": 411,
+      "start_time": 1059.04,
+      "end_time": 1062.4,
+      "duration": 3.36,
+      "speaker": "1",
+      "utterance": "We go over to positive three and then we're going to go which way, up or down?"
+    },
+    {
+      "line_number": 412,
+      "start_time": 1064.6,
+      "end_time": 1065.72,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "We're going to go down to what?"
+    },
+    {
+      "line_number": 413,
+      "start_time": 1065.92,
+      "end_time": 1067.52,
+      "duration": 1.6,
+      "speaker": "1",
+      "utterance": "All right, you got to tell me what quadrant it is."
+    },
+    {
+      "line_number": 414,
+      "start_time": 1068.6,
+      "end_time": 1070.04,
+      "duration": 1.44,
+      "speaker": "1",
+      "utterance": "What numbers are we going to put in the quadrant?"
+    },
+    {
+      "line_number": 415,
+      "start_time": 1070.08,
+      "end_time": 1071.16,
+      "duration": 1.08,
+      "speaker": "1",
+      "utterance": "No, look at where's it at?"
+    },
+    {
+      "line_number": 416,
+      "start_time": 1071.2,
+      "end_time": 1071.88,
+      "duration": 0.68,
+      "speaker": "1",
+      "utterance": "Negative one."
+    },
+    {
+      "line_number": 417,
+      "start_time": 1072.76,
+      "end_time": 1073.12,
+      "duration": 0.36,
+      "speaker": "1",
+      "utterance": "One."
+    },
+    {
+      "line_number": 418,
+      "start_time": 1073.16,
+      "end_time": 1074.16,
+      "duration": 1.0,
+      "speaker": "1",
+      "utterance": "So it might help if you do this."
+    },
+    {
+      "line_number": 419,
+      "start_time": 1074.16,
+      "end_time": 1074.64,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "Where's your marker?"
+    },
+    {
+      "line_number": 420,
+      "start_time": 1076.92,
+      "end_time": 1080.24,
+      "duration": 3.32,
+      "speaker": "1",
+      "utterance": "So it might help to we need to place so put your little point on there."
+    },
+    {
+      "line_number": 421,
+      "start_time": 1081.08,
+      "end_time": 1081.36,
+      "duration": 0.28,
+      "speaker": "15",
+      "utterance": "I'm going to"
+    },
+    {
+      "line_number": 422,
+      "start_time": 1081.48,
+      "end_time": 1082.24,
+      "duration": 0.76,
+      "speaker": "2",
+      "utterance": "And then give me the marker."
+    },
+    {
+      "line_number": 423,
+      "start_time": 1083.0,
+      "end_time": 1084.96,
+      "duration": 1.96,
+      "speaker": "2",
+      "utterance": "And you can just tell me the first location."
+    },
+    {
+      "line_number": 424,
+      "start_time": 1087.16,
+      "end_time": 1088.24,
+      "duration": 1.08,
+      "speaker": "15",
+      "utterance": "So you start at zero."
+    },
+    {
+      "line_number": 425,
+      "start_time": 1088.24,
+      "end_time": 1088.52,
+      "duration": 0.28,
+      "speaker": "15",
+      "utterance": "Where do you go"
+    },
+    {
+      "line_number": 426,
+      "start_time": 1088.6,
+      "end_time": 1089.08,
+      "duration": 0.48,
+      "speaker": "1",
+      "utterance": "We're going to write on here."
+    },
+    {
+      "line_number": 427,
+      "start_time": 1090.56,
+      "end_time": 1091.68,
+      "duration": 1.12,
+      "speaker": "1",
+      "utterance": "Thank you for watching."
+    },
+    {
+      "line_number": 428,
+      "start_time": 1091.68,
+      "end_time": 1093.92,
+      "duration": 2.24,
+      "speaker": "1",
+      "utterance": "I hope you really enjoyed our lesson today."
+    },
+    {
+      "line_number": 429,
+      "start_time": 1094.32,
+      "end_time": 1095.92,
+      "duration": 1.6,
+      "speaker": "5",
+      "utterance": "Go Eagles."
+    }
+  ]
+}

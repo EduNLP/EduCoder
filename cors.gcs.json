@@ -1,0 +1,13 @@
+[
+  {
+    "origin": ["https://www.edu-coder.com", "https://edu-coder.com", "http://localhost:3000"],
+    "method": ["GET", "POST", "PUT", "HEAD", "OPTIONS"],
+    "responseHeader": [
+      "Content-Type",
+      "x-goog-meta-original-file-name",
+      "x-goog-meta-transcript-id",
+      "x-goog-meta-uploader-id"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
