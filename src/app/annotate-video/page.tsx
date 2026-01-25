@@ -1804,6 +1804,17 @@ function AnnotationPageContent() {
       : 0
   const isSegmentSeekEnabled =
     Boolean(videoSource?.url) && Boolean(segmentDuration && segmentDuration > 0)
+  const resolvedVideoMimeType = useMemo(() => {
+    const rawMimeType = videoSource?.mimeType?.trim().toLowerCase()
+    if (!rawMimeType) return 'video/mp4'
+    if (typeof document === 'undefined') {
+      return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+    }
+
+    const canPlay = document.createElement('video').canPlayType(rawMimeType)
+    if (canPlay) return rawMimeType
+    return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+  }, [videoSource?.mimeType])
   const shouldShowPlayOverlay =
     Boolean(videoSource?.url) && !hasPlayedOnce && showVideoPlayOverlay
 
@@ -2848,7 +2859,7 @@ function AnnotationPageContent() {
                     {videoSource?.url ? (
                       <source
                         src={videoSource.url}
-                        type={videoSource.mimeType ?? 'video/mp4'}
+                        type={resolvedVideoMimeType}
                       />
                     ) : null}
                     Your browser does not support the video tag.
