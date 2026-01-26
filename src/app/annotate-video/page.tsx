@@ -224,16 +224,19 @@ const NOTE_DETAILS_FIELD_CONFIG = [
   {
     id: 'studentEvidence',
     label: 'What are the students saying or doing?',
+    placeholder: 'Add student evidence',
     noteKey: 'q1',
   },
   {
     id: 'utteranceNote',
     label: 'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
+    placeholder: 'Add interpretation tied to the lesson purpose',
     noteKey: 'q2',
   },
   {
     id: 'thinkingInsight',
     label: 'What possible teacher responses would you do?',
+    placeholder: 'Add possible teacher responses',
     noteKey: 'q3',
   },
 ] as const
