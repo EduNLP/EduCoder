@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const uploaderWhere = { auth_user_id: authUserId } as Prisma.UserWhereInput
     const uploader = await prisma.user.findFirst({
       where: uploaderWhere,
-      select: { id: true },
+      select: { id: true, workspace_id: true },
     })
 
     if (!uploader) {
@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       const transcript = await tx.transcripts.create({
         data: {
           uploaded_by: uploader.id,
+          workspace_id: uploader.workspace_id,
           title: transcriptName,
           grade,
           instruction_context: instructions || '',

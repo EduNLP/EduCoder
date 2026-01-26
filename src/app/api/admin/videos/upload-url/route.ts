@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const uploaderWhere = { auth_user_id: authUserId } as Prisma.UserWhereInput
     const uploader = await prisma.user.findFirst({
       where: uploaderWhere,
-      select: { id: true },
+      select: { id: true, workspace_id: true },
     })
 
     if (!uploader) {
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     const transcript = await prisma.transcripts.findUnique({
       where: { id: transcriptId },
-      select: { id: true, title: true },
+      select: { id: true, title: true, workspace_id: true },
     })
 
     if (!transcript) {
@@ -72,6 +72,10 @@ export async function POST(request: Request) {
         { success: false, error: 'Transcript not found.' },
         { status: 404 },
       )
+    }
+
+    if (transcript.workspace_id !== uploader.workspace_id) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
     const upload = await createTranscriptVideoUploadUrl({

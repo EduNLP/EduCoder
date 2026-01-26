@@ -7,13 +7,70 @@ import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
+type AdminActor = Pick<User, 'id' | 'role' | 'workspace_id'>
+
+const getAdminActor = async (): Promise<{
+  actor?: AdminActor
+  error?: NextResponse
+}> => {
+  const { userId: authUserId } = await auth()
+  if (!authUserId) {
+    return {
+      error: NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
+      ),
+    }
+  }
+
+  const actor = await prisma.user.findFirst({
+    where: { auth_user_id: authUserId },
+    select: { id: true, role: true, workspace_id: true },
+  })
+
+  if (!actor) {
+    return {
+      error: NextResponse.json(
+        {
+          success: false,
+          error: 'Authenticated user is not registered in the application database.',
+        },
+        { status: 403 },
+      ),
+    }
+  }
+
+  if (actor.role !== 'admin') {
+    return {
+      error: NextResponse.json(
+        { success: false, error: 'Only admins can manage annotators.' },
+        { status: 403 },
+      ),
+    }
+  }
+
+  return { actor }
+}
+
 export async function GET() {
   try {
+    const { actor, error } = await getAdminActor()
+    if (error) {
+      return error
+    }
+    if (!actor) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
+      )
+    }
+
     const annotators = await prisma.user.findMany({
       where: {
         role: {
           in: ['annotator', 'admin'],
         },
+        workspace_id: actor.workspace_id,
       },
       select: {
         id: true,
@@ -24,6 +81,9 @@ export async function GET() {
         annotations: {
           where: {
             hide: { not: true },
+            transcript: {
+              workspace_id: actor.workspace_id,
+            },
           },
           select: {
             id: true,
@@ -142,16 +202,18 @@ const normalizeTranscriptIds = (candidate: unknown): string[] => {
 const assignTranscriptsToAnnotator = async ({
   transcriptIds,
   annotatorId,
+  workspaceId,
 }: {
   transcriptIds: string[]
   annotatorId: string
+  workspaceId: string
 }) => {
   if (transcriptIds.length === 0) {
     return 0
   }
 
   const transcripts = await prisma.transcripts.findMany({
-    where: { id: { in: transcriptIds } },
+    where: { id: { in: transcriptIds }, workspace_id: workspaceId },
     select: { id: true },
   })
 
@@ -179,13 +241,15 @@ const assignTranscriptsToAnnotator = async ({
 const syncAnnotatorTranscriptAssignments = async ({
   transcriptIds,
   annotatorId,
+  workspaceId,
 }: {
   transcriptIds: string[]
   annotatorId: string
+  workspaceId: string
 }) => {
   if (transcriptIds.length > 0) {
     const transcripts = await prisma.transcripts.findMany({
-      where: { id: { in: transcriptIds } },
+      where: { id: { in: transcriptIds }, workspace_id: workspaceId },
       select: { id: true },
     })
 
@@ -197,7 +261,10 @@ const syncAnnotatorTranscriptAssignments = async ({
   }
 
   const existingAssignments = await prisma.annotations.findMany({
-    where: { created_for: annotatorId },
+    where: {
+      created_for: annotatorId,
+      transcript: { workspace_id: workspaceId },
+    },
     select: { transcript_id: true },
   })
 
@@ -267,6 +334,17 @@ const syncAnnotatorTranscriptAssignments = async ({
 
 export async function POST(request: Request) {
   try {
+    const { actor, error } = await getAdminActor()
+    if (error) {
+      return error
+    }
+    if (!actor) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
+      )
+    }
+
     if (!process.env.CLERK_SECRET_KEY) {
       return NextResponse.json(
         { error: 'Clerk secret key is not configured on the server.' },
@@ -307,16 +385,21 @@ export async function POST(request: Request) {
 
     let databaseUser: User | null = null
     try {
-      const userData = {
+      const userData: Prisma.UserCreateInput = {
         name,
         username,
         password,
         role: normalizedRole,
         auth_user_id: createdUser.id,
+        workspace: {
+          connect: {
+            id: actor.workspace_id,
+          },
+        },
       }
 
       databaseUser = await prisma.user.create({
-        data: userData as Prisma.UserCreateInput,
+        data: userData,
       })
     } catch (databaseError) {
       console.error('Failed to create annotator in Prisma', databaseError)
@@ -345,6 +428,7 @@ export async function POST(request: Request) {
       await assignTranscriptsToAnnotator({
         transcriptIds,
         annotatorId: databaseUser.id,
+        workspaceId: actor.workspace_id,
       })
     } catch (assignmentError) {
       console.error(
@@ -400,6 +484,17 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const { actor, error } = await getAdminActor()
+    if (error) {
+      return error
+    }
+    if (!actor) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
+      )
+    }
+
     const body = await request.json().catch(() => null)
     const annotatorId =
       typeof body?.annotatorId === 'string' ? body.annotatorId.trim() : ''
@@ -414,8 +509,8 @@ export async function PATCH(request: Request) {
       )
     }
 
-    const annotator = await prisma.user.findUnique({
-      where: { id: annotatorId },
+    const annotator = await prisma.user.findFirst({
+      where: { id: annotatorId, workspace_id: actor.workspace_id },
       select: { id: true },
     })
 
@@ -430,6 +525,7 @@ export async function PATCH(request: Request) {
       await syncAnnotatorTranscriptAssignments({
         transcriptIds,
         annotatorId,
+        workspaceId: actor.workspace_id,
       })
 
     return NextResponse.json({
@@ -457,20 +553,14 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const { userId: authUserId } = await auth()
-    if (!authUserId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    const { actor, error } = await getAdminActor()
+    if (error) {
+      return error
     }
-
-    const actor = await prisma.user.findFirst({
-      where: { auth_user_id: authUserId },
-      select: { id: true, role: true },
-    })
-
-    if (!actor || actor.role !== 'admin') {
+    if (!actor) {
       return NextResponse.json(
-        { success: false, error: 'Only admins can delete annotators.' },
-        { status: 403 },
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
       )
     }
 
@@ -488,8 +578,8 @@ export async function DELETE(request: Request) {
       )
     }
 
-    const annotator = await prisma.user.findUnique({
-      where: { id: annotatorId },
+    const annotator = await prisma.user.findFirst({
+      where: { id: annotatorId, workspace_id: actor.workspace_id },
       select: { id: true, name: true, username: true, auth_user_id: true },
     })
 

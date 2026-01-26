@@ -1,11 +1,40 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 export async function GET() {
   try {
+    const { userId: authUserId } = await auth()
+    if (!authUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 },
+      )
+    }
+
+    const actor = await prisma.user.findFirst({
+      where: { auth_user_id: authUserId },
+      select: { id: true, workspace_id: true },
+    })
+
+    if (!actor) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authenticated user is not registered in the application database.',
+        },
+        { status: 403 },
+      )
+    }
+
     const annotations = await prisma.annotations.findMany({
+      where: {
+        transcript: {
+          workspace_id: actor.workspace_id,
+        },
+      },
       select: {
         id: true,
         gcs_path: true,
