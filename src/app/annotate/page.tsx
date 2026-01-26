@@ -186,21 +186,17 @@ const NOTE_DETAILS_FIELD_CONFIG = [
   {
     id: 'studentEvidence',
     questionKey: 'q1',
-    label: 'What are students saying in the selected piece(s) of evidence?',
-    placeholder: 'Capture direct quotes or summaries from the selected lines.',
+    label: 'What are the students saying or doing?',
   },
   {
     id: 'utteranceNote',
     questionKey: 'q2',
-    label: 'What would you like to note about this utterance?',
-    placeholder: 'Add your observation, context, or instructional move to track.',
+    label: 'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
   },
   {
     id: 'thinkingInsight',
     questionKey: 'q3',
-    label:
-      "What does this utterance reveal about the student's thinking or understanding?",
-    placeholder: "Interpret the mathematical reasoning or misconception you're seeing.",
+    label: 'What possible teacher responses would you do?',
   },
 ] as const
 
@@ -422,8 +418,7 @@ function AnnotationPageContent() {
   const searchParams = useSearchParams()
   const { theme } = useTheme()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
-  const { isLoaded: userLoaded, user } = useUser()
-  const role = (user?.publicMetadata?.role as string | undefined) ?? null
+  const { isLoaded: userLoaded } = useUser()
   const [transcriptRows, setTranscriptRows] = useState<TranscriptRow[]>([])
   const [transcriptMeta, setTranscriptMeta] = useState<TranscriptMeta | null>(null)
   const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>(
@@ -454,7 +449,7 @@ function AnnotationPageContent() {
     utterance: true,
     notes: true,
   })
-  const [showLlmAnnotations, setShowLlmAnnotations] = useState(true)
+  const [showLlmAnnotations, setShowLlmAnnotations] = useState(false)
   const [rowFlags, setRowFlags] = useState<Record<string, boolean>>({})
   const [noteBadges, setNoteBadges] = useState<NoteBadge[]>([])
   const [notesError, setNotesError] = useState<string | null>(null)
@@ -513,14 +508,15 @@ function AnnotationPageContent() {
     startY: 0,
   })
   const skipClickRef = useRef<string | null>(null)
+  const showLlmNotesMenu = false // Temporary: hide LLM notes toggle from the menu.
 
   const selectRow = useCallback((rowId: string) => {
     setCheckedRows({})
     setSelectedRow(rowId)
     setAnnotationCollapsed(false)
   }, [])
-  const annotationMenuLinks = useMemo(
-    () => [
+  const annotationMenuLinks = useMemo(() => {
+    const links = [
       {
         id: 'toggle-toolbar',
         label: toolbarVisible
@@ -533,16 +529,20 @@ function AnnotationPageContent() {
         label: showLlmAnnotations ? 'Hide LLM notes' : 'Show LLM notes',
         icon: showLlmAnnotations ? EyeOff : Eye,
       },
-      { id: 'hunt', label: 'Start Scavenger Hunt ✨', accent: true },
       {
         id: 'complete',
         label: isAnnotationComplete ? 'Mark as In Progress' : 'Mark as Complete',
         icon: BookmarkCheck,
       },
       { id: 'logout', label: 'Log Out', icon: LogOut },
-    ],
-    [isAnnotationComplete, showLlmAnnotations, toolbarVisible],
-  )
+    ]
+
+    if (!showLlmNotesMenu) {
+      links.splice(1, 1)
+    }
+
+    return links
+  }, [isAnnotationComplete, showLlmAnnotations, showLlmNotesMenu, toolbarVisible])
 
   useEffect(() => {
     return () => {
@@ -898,14 +898,11 @@ function AnnotationPageContent() {
       return
     }
 
-    if (role === 'admin') {
-      router.replace('/admin')
-    }
-  }, [authLoaded, isSignedIn, role, router, userLoaded])
+  }, [authLoaded, isSignedIn, router, userLoaded])
 
   useEffect(() => {
     if (!authLoaded || !userLoaded) return
-    if (!isSignedIn || role === 'admin') return
+    if (!isSignedIn) return
 
     if (!requestedTranscriptId) {
       setTranscriptMeta(null)
@@ -939,7 +936,6 @@ function AnnotationPageContent() {
     isSignedIn,
     loadTranscript,
     requestedTranscriptId,
-    role,
     transcriptMeta?.id,
     userLoaded,
   ])
@@ -1148,7 +1144,7 @@ function AnnotationPageContent() {
     )
   }
 
-  if (!isSignedIn || role === 'admin') {
+  if (!isSignedIn) {
     return (
       <div
         className="flex min-h-screen items-center justify-center px-3 pb-6 pt-0 text-slate-900 sm:px-4 lg:px-6"
@@ -1725,10 +1721,6 @@ function AnnotationPageContent() {
       return
     }
 
-    if (link.id === 'hunt') {
-      router.push('/scavenger-hunt')
-    }
-
     if (link.id === 'complete') {
       handleMarkAnnotationComplete(!isAnnotationComplete)
     }
@@ -1761,6 +1753,8 @@ function AnnotationPageContent() {
           onWorkspaceClick={handleBackToWorkspace}
           showWorkspaceButton
           showToolbarToggleButton={false}
+          showCommandCenterCloseButton={false}
+          showCommandCenterHeading={false}
           menuLinks={annotationMenuLinks}
           onMenuLinkClick={handleMenuLinkAction}
           variant="minimal"
@@ -2411,12 +2405,11 @@ function AnnotationPageContent() {
                                             }))
                                           }}
                                           className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none"
-                                          placeholder="e.g., Student connects area models"
                                         />
                                       </div>
                                       <div className="space-y-2">
                                         <label className="text-sm font-semibold text-slate-700">
-                                          What are students saying in the selected piece(s) of evidence?
+                                          What are the students saying or doing?
                                         </label>
                                         <textarea
                                           value={newNote.studentEvidence}
@@ -2429,12 +2422,11 @@ function AnnotationPageContent() {
                                           }}
                                           rows={3}
                                           className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none"
-                                          placeholder="Capture direct quotes or summaries from the selected lines."
                                         />
                                       </div>
                                       <div className="space-y-2">
                                         <label className="text-sm font-semibold text-slate-700">
-                                          What would you like to note about this utterance?
+                                          Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)
                                         </label>
                                         <textarea
                                           value={newNote.utteranceNote}
@@ -2447,12 +2439,11 @@ function AnnotationPageContent() {
                                           }}
                                           rows={3}
                                           className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none"
-                                          placeholder="Add your observation, context, or instructional move to track."
                                         />
                                       </div>
                                       <div className="space-y-2">
                                         <label className="text-sm font-semibold text-slate-700">
-                                          What does this utterance reveal about the student's thinking or understanding?
+                                          What possible teacher responses would you do?
                                         </label>
                                         <textarea
                                           value={newNote.thinkingInsight}
@@ -2465,7 +2456,6 @@ function AnnotationPageContent() {
                                           }}
                                           rows={3}
                                           className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none"
-                                          placeholder="Interpret the mathematical reasoning or misconception you're seeing."
                                         />
                                       </div>
                                       <button

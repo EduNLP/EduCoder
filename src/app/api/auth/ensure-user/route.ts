@@ -28,7 +28,7 @@ const buildUsername = (input: {
   return `user-${input.fallbackId.slice(0, 8)}`
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -56,6 +56,9 @@ export async function POST() {
       )
     }
 
+    const body = await request.json().catch(() => null)
+    const requestedName = typeof body?.name === 'string' ? body.name.trim() : ''
+
     const client = await clerkClient()
     const clerkUser = await client.users.getUser(userId)
     const primaryEmail =
@@ -63,12 +66,23 @@ export async function POST() {
         (address) => address.id === clerkUser.primaryEmailAddressId,
       )?.emailAddress ?? clerkUser.emailAddresses?.[0]?.emailAddress
 
-    const displayName = buildDisplayName({
+    const fallbackDisplayName = buildDisplayName({
       firstName: clerkUser.firstName,
       lastName: clerkUser.lastName,
       username: clerkUser.username,
       email: primaryEmail,
     })
+
+    if (!requestedName) {
+      return NextResponse.json({
+        created: false,
+        needsProfile: true,
+        suggestedName: fallbackDisplayName,
+        email: primaryEmail ?? null,
+      })
+    }
+
+    const displayName = requestedName
     const username = buildUsername({
       username: clerkUser.username,
       email: primaryEmail,

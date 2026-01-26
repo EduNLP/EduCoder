@@ -19,6 +19,7 @@ type AnnotatorsResponse = {
       title: string
     }>
   }>
+  currentUserId?: string
   error?: string
 }
 
@@ -34,6 +35,7 @@ export default function AnnotatorsPage() {
   const [annotatorsError, setAnnotatorsError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingAnnotatorId, setDeletingAnnotatorId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoaded || !userLoaded) {
@@ -74,6 +76,7 @@ export default function AnnotatorsPage() {
         }
 
         if (!isCancelled) {
+          setCurrentUserId(payload.currentUserId ?? null)
           const normalizedAnnotators: Annotator[] = payload.annotators.map((annotator) => ({
             id: annotator.id,
             name: annotator.name,
@@ -99,6 +102,7 @@ export default function AnnotatorsPage() {
               : 'Failed to load annotators. Please try again.'
           setAnnotatorsError(message)
           setAnnotators([])
+          setCurrentUserId(null)
         }
       } finally {
         if (!isCancelled) {
@@ -270,67 +274,72 @@ export default function AnnotatorsPage() {
                   </td>
                 </tr>
               ) : (
-                annotators.map((annotator) => (
-                <tr
-                  key={annotator.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <span className="font-medium text-gray-900">
-                      {annotator.name}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-gray-700">
-                      {annotator.username}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        annotator.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}
+                annotators.map((annotator) => {
+                  const isCurrentUser = annotator.id === currentUserId
+                  return (
+                    <tr
+                      key={annotator.id}
+                      className="hover:bg-gray-50 transition-colors"
                     >
-                      {annotator.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {annotator.assignedTranscripts.length > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">
-                          {annotator.assignedTranscripts.length} transcript{annotator.assignedTranscripts.length !== 1 ? 's' : ''}
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-gray-900">
+                          {annotator.name}
                         </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-500 italic">
-                        No assignments
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleEditClick(annotator)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => void deleteAnnotator(annotator.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={deletingAnnotatorId === annotator.id}
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                ))
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-gray-700">
+                          {annotator.username}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                            annotator.role === 'admin'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {annotator.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {annotator.assignedTranscripts.length > 0 ? (
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-900">
+                              {annotator.assignedTranscripts.length} transcript{annotator.assignedTranscripts.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500 italic">
+                            No assignments
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEditClick(annotator)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          {isCurrentUser ? null : (
+                            <button
+                              onClick={() => void deleteAnnotator(annotator.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={deletingAnnotatorId === annotator.id}
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -346,66 +355,71 @@ export default function AnnotatorsPage() {
         ) : annotators.length === 0 ? (
           <p className="text-sm text-gray-500">No annotators found.</p>
         ) : (
-          annotators.map((annotator) => (
-            <div
-              key={annotator.id}
-              className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
-            >
-              <div className="flex items-start mb-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    {annotator.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    @{annotator.username}
-                  </p>
-                  <span
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${
-                      annotator.role === 'admin'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-blue-100 text-blue-800'
-                    }`}
-                  >
-                    {annotator.role}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 mb-2">Assigned Transcripts:</p>
-                {annotator.assignedTranscripts.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-900">
-                      {annotator.assignedTranscripts.length} transcript{annotator.assignedTranscripts.length !== 1 ? 's' : ''}
+          annotators.map((annotator) => {
+            const isCurrentUser = annotator.id === currentUserId
+            return (
+              <div
+                key={annotator.id}
+                className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
+              >
+                <div className="flex items-start mb-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {annotator.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      @{annotator.username}
+                    </p>
+                    <span
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${
+                        annotator.role === 'admin'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {annotator.role}
                     </span>
                   </div>
-                ) : (
-                  <span className="text-sm text-gray-500 italic">
-                    No assignments
-                  </span>
-                )}
-              </div>
+                </div>
 
-              <div className="flex gap-2 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => handleEditClick(annotator)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span className="text-sm font-medium">Edit</span>
-                </button>
-                <button
-                  onClick={() => void deleteAnnotator(annotator.id)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={deletingAnnotatorId === annotator.id}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="text-sm font-medium">Delete</span>
-                </button>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-2">Assigned Transcripts:</p>
+                  {annotator.assignedTranscripts.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-900">
+                        {annotator.assignedTranscripts.length} transcript{annotator.assignedTranscripts.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-500 italic">
+                      No assignments
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => handleEditClick(annotator)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="text-sm font-medium">Edit</span>
+                  </button>
+                  {isCurrentUser ? null : (
+                    <button
+                      onClick={() => void deleteAnnotator(annotator.id)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={deletingAnnotatorId === annotator.id}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span className="text-sm font-medium">Delete</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 

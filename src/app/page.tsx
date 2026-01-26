@@ -6,9 +6,7 @@ export default async function RootPage() {
   const user = await currentUser()
 
   if (user) {
-    const role = user.publicMetadata?.role
-    const destination = role === 'admin' ? '/admin' : '/workspace'
-    redirect(destination)
+    redirect('/workspace')
   }
 
   return <LoginView />

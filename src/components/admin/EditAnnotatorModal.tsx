@@ -143,12 +143,7 @@ export default function EditAnnotatorModal({
 
   if (!isOpen) return null
 
-  const isAdminRole = role === 'admin'
   const handleTranscriptToggle = (transcriptId: string) => {
-    if (isAdminRole) {
-      return
-    }
-
     setSelectedTranscriptIds((prev) =>
       prev.includes(transcriptId)
         ? prev.filter((id) => id !== transcriptId)
@@ -158,10 +153,6 @@ export default function EditAnnotatorModal({
 
   const handleRoleChange = (value: string) => {
     setRole(value)
-
-    if (value === 'admin') {
-      setSelectedTranscriptIds([])
-    }
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -172,11 +163,6 @@ export default function EditAnnotatorModal({
     }
 
     if (annotator) {
-      if (isAdminRole) {
-        setErrorMessage('Admins cannot be assigned specific transcripts.')
-        return
-      }
-
       try {
         setIsSubmitting(true)
         setErrorMessage(null)
@@ -429,57 +415,49 @@ export default function EditAnnotatorModal({
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Assignable Transcripts
               </label>
-              {isAdminRole ? (
-                <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
-                  <p className="text-sm text-gray-600">
-                    Admins manage transcripts globally and cannot be assigned individual transcripts.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto bg-gray-50">
-                    <div className="space-y-2">
-                      {isLoadingTranscripts && availableTranscripts.length === 0 && (
-                        <p className="text-sm text-gray-500">Loading transcripts…</p>
-                      )}
-                      {transcriptsError && (
-                        <p className="text-sm text-red-600">{transcriptsError}</p>
-                      )}
-                      {!isLoadingTranscripts && !transcriptsError && availableTranscripts.length === 0 && (
-                        <p className="text-sm text-gray-500">No transcripts available.</p>
-                      )}
-                      {availableTranscripts.map((transcript) => (
-                        <label
-                          key={transcript.id}
-                          className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedTranscriptIds.includes(transcript.id)}
-                            onChange={() => handleTranscriptToggle(transcript.id)}
-                            className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
-                            disabled={isSubmitting || isLoadingTranscripts}
-                          />
-                          <span className="text-sm font-medium text-gray-900">
-                            {transcript.title}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+              <>
+                <div className="border border-gray-300 rounded-lg p-4 max-h-64 overflow-y-auto bg-gray-50">
+                  <div className="space-y-2">
+                    {isLoadingTranscripts && availableTranscripts.length === 0 && (
+                      <p className="text-sm text-gray-500">Loading transcripts…</p>
+                    )}
+                    {transcriptsError && (
+                      <p className="text-sm text-red-600">{transcriptsError}</p>
+                    )}
+                    {!isLoadingTranscripts && !transcriptsError && availableTranscripts.length === 0 && (
+                      <p className="text-sm text-gray-500">No transcripts available.</p>
+                    )}
+                    {availableTranscripts.map((transcript) => (
+                      <label
+                        key={transcript.id}
+                        className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTranscriptIds.includes(transcript.id)}
+                          onChange={() => handleTranscriptToggle(transcript.id)}
+                          className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                          disabled={isSubmitting || isLoadingTranscripts}
+                        />
+                        <span className="text-sm font-medium text-gray-900">
+                          {transcript.title}
+                        </span>
+                      </label>
+                    ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {selectedTranscriptIds.length} transcript
-                    {selectedTranscriptIds.length !== 1 ? 's' : ''} selected
-                  </p>
-                </>
-              )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {selectedTranscriptIds.length} transcript
+                  {selectedTranscriptIds.length !== 1 ? 's' : ''} selected
+                </p>
+              </>
             </div>
 
             {/* Info Box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Annotators will only be able to view and work on
-                the transcripts you assign to them. They will not see other transcripts.
+                <strong>Note:</strong> Assigned users only see these transcripts in the
+                annotator workspace. Admins still have full access in the admin panel.
               </p>
             </div>
 

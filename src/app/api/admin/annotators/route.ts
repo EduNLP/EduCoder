@@ -126,6 +126,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       annotators: normalizedAnnotators,
+      currentUserId: actor.id,
     })
   } catch (error) {
     console.error('Failed to fetch annotators', error)
@@ -371,16 +372,15 @@ export async function POST(request: Request) {
 
     const [firstName, ...rest] = name.split(' ').filter(Boolean)
     const lastName = rest.join(' ') || undefined
-    const emailAddressCandidate = username.includes('@') ? username : undefined
+    const isEmailAddress = username.includes('@')
     const client = await clerkClient()
 
     const createdUser = await client.users.createUser({
-      username,
       password,
       firstName: firstName || undefined,
       lastName,
       publicMetadata: { role: normalizedRole },
-      ...(emailAddressCandidate ? { emailAddress: [emailAddressCandidate] } : {}),
+      ...(isEmailAddress ? { emailAddress: [username] } : { username }),
     })
 
     let databaseUser: User | null = null

@@ -7,14 +7,14 @@ import {
   ChevronUp,
   LogOut,
   Menu,
+  Shield,
   Sparkles,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/context/ThemeContext'
-import { useClerk } from '@clerk/nextjs'
+import { useClerk, useUser } from '@clerk/nextjs'
 
 type WorkspaceHeaderProps = {
   toolbarVisible: boolean
@@ -24,6 +24,8 @@ type WorkspaceHeaderProps = {
   workspaceLabel?: string
   showWorkspaceButton?: boolean
   showToolbarToggleButton?: boolean
+  showCommandCenterCloseButton?: boolean
+  showCommandCenterHeading?: boolean
   menuLinks?: MenuLink[]
   leftLabel?: string
   children?: ReactNode
@@ -42,7 +44,6 @@ type MenuLink = {
 }
 
 const defaultMenuLinks: MenuLink[] = [
-  { id: 'hunt', label: 'Start Scavenger Hunt ✨', accent: true },
   { id: 'complete', label: 'Mark as Complete', icon: BookmarkCheck },
   { id: 'logout', label: 'Log Out', icon: LogOut },
 ]
@@ -55,6 +56,8 @@ export function WorkspaceHeader({
   workspaceLabel = 'Workspace',
   showWorkspaceButton = true,
   showToolbarToggleButton = true,
+  showCommandCenterCloseButton = true,
+  showCommandCenterHeading = true,
   menuLinks = defaultMenuLinks,
   leftLabel,
   children,
@@ -66,13 +69,16 @@ export function WorkspaceHeader({
 }: WorkspaceHeaderProps) {
   const router = useRouter()
   const { signOut } = useClerk()
+  const { isLoaded: userLoaded, user } = useUser()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
-  const { themeId, setTheme, themeOptions } = useTheme()
   const isMinimal = variant === 'minimal'
   const isCompact = density === 'compact'
   const isIconWorkspaceButton = workspaceButtonVariant === 'icon'
+  const isAdmin = userLoaded && user?.publicMetadata?.role === 'admin'
+  const showCommandCenterHeaderRow =
+    showCommandCenterHeading || showCommandCenterCloseButton
 
   const headerClassName = isMinimal
     ? isCompact
@@ -144,6 +150,11 @@ export function WorkspaceHeader({
 
     onMenuLinkClick?.(link)
     setMenuOpen(false)
+  }
+
+  const handleAdminClick = () => {
+    setMenuOpen(false)
+    router.push('/admin')
   }
 
   useEffect(() => {
@@ -261,19 +272,35 @@ export function WorkspaceHeader({
               id="command-menu-panel"
               className="stealth-scrollbar stealth-scrollbar--active absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 max-w-sm max-h-[70vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white/95 p-6 pr-5 text-left shadow-2xl shadow-slate-200/80"
             >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold uppercase tracking-widest text-slate-500">
-                  Command Center
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
-                >
-                  Close
-                </button>
-              </div>
-              <nav className="mt-4 space-y-2">
+              {showCommandCenterHeaderRow && (
+                <div className="flex items-center justify-between">
+                  {showCommandCenterHeading && (
+                    <p className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+                      Command Center
+                    </p>
+                  )}
+                  {showCommandCenterCloseButton && (
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen(false)}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
+              )}
+              <nav className={showCommandCenterHeaderRow ? 'mt-4 space-y-2' : 'space-y-2'}>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleAdminClick}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left text-sm font-medium text-indigo-700 shadow-sm shadow-indigo-100/70 transition hover:border-indigo-300 hover:bg-indigo-100"
+                  >
+                    <Shield className="h-4 w-4" />
+                    Admin Panel
+                  </button>
+                )}
                 {menuLinks.map((link) => (
                   <button
                     key={link.id}
@@ -299,39 +326,6 @@ export function WorkspaceHeader({
                   {menuContent}
                 </div>
               )}
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                  Theme
-                </p>
-                <div className="mt-3 space-y-2">
-                  {themeOptions.map((option) => {
-                    const isActive = option.id === themeId
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setTheme(option.id)}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
-                          isActive
-                            ? 'border-indigo-300 bg-white text-indigo-600 shadow-sm shadow-indigo-100'
-                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600'
-                        }`}
-                        aria-pressed={isActive}
-                      >
-                        <span className="font-semibold">{option.label}</span>
-                        <span
-                          className="h-9 w-9 rounded-2xl border border-slate-200 shadow-inner shadow-slate-200/60"
-                          style={{
-                            backgroundColor: option.backgroundColor,
-                            backgroundImage: option.backgroundImage ?? undefined,
-                          }}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
             </div>
           )}
         </div>

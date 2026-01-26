@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       data: { lastLogin: new Date() },
     })
 
-    const redirectPath = user.role === 'admin' ? '/admin' : '/workspace'
+    const redirectPath = '/workspace'
 
     return NextResponse.json({
       success: true,

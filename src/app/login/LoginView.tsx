@@ -22,10 +22,10 @@ export default function LoginView() {
   const { isLoaded: signUpLoaded, signUp } = useSignUp()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
   const { isLoaded: userLoaded, user } = useUser()
-  const role = user?.publicMetadata?.role as string | undefined
   const [loginMode, setLoginMode] = useState<LoginMode>('email')
   const [emailEntry, setEmailEntry] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [emailSentTo, setEmailSentTo] = useState<string | null>(null)
   const [isEmailSubmitting, setIsEmailSubmitting] = useState(false)
   const [formState, setFormState] = useState<LoginFormState>({
     username: '',
@@ -34,6 +34,11 @@ export default function LoginView() {
   })
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [needsProfile, setNeedsProfile] = useState(false)
+  const [profileName, setProfileName] = useState('')
+  const [profileEmail, setProfileEmail] = useState<string | null>(null)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [isProfileSubmitting, setIsProfileSubmitting] = useState(false)
 
   const pageBackgroundStyle = useMemo(
     () => ({
@@ -46,7 +51,16 @@ export default function LoginView() {
   const syncTriggeredRef = useRef(false)
 
   useEffect(() => {
-    if (!authLoaded || !userLoaded || !isSignedIn) {
+    if (!authLoaded || !userLoaded) {
+      return
+    }
+
+    if (!isSignedIn) {
+      syncTriggeredRef.current = false
+      setNeedsProfile(false)
+      setProfileName('')
+      setProfileEmail(null)
+      setProfileError(null)
       return
     }
 
@@ -70,14 +84,31 @@ export default function LoginView() {
           return
         }
 
+        if (payload?.needsProfile) {
+          const suggestedName =
+            typeof payload?.suggestedName === 'string'
+              ? payload.suggestedName.trim()
+              : ''
+          const cleanedSuggestedName =
+            suggestedName && !suggestedName.includes('@') && suggestedName !== 'New User'
+              ? suggestedName
+              : ''
+          setProfileName(cleanedSuggestedName)
+          setProfileEmail(
+            typeof payload?.email === 'string' ? payload.email : null,
+          )
+          setProfileError(null)
+          setNeedsProfile(true)
+          setError(null)
+          setEmailError(null)
+          return
+        }
+
         if (user?.reload) {
           await user.reload()
         }
 
-        const resolvedRole =
-          (payload?.role as string | undefined) ?? role ?? 'user'
-        const destination = resolvedRole === 'admin' ? '/admin' : '/workspace'
-        router.replace(destination)
+        router.replace('/workspace')
       } catch (syncError) {
         console.error('Failed to sync auth user', syncError)
         syncTriggeredRef.current = false
@@ -88,7 +119,7 @@ export default function LoginView() {
     }
 
     void syncUser()
-  }, [authLoaded, isSignedIn, role, router, user, userLoaded])
+  }, [authLoaded, isSignedIn, router, user, userLoaded])
 
   const openWorkspaceLogin = (prefillEmail?: string) => {
     const normalizedEmail = prefillEmail?.trim().toLowerCase() ?? ''
@@ -99,6 +130,7 @@ export default function LoginView() {
       }))
     }
     setEmailError(null)
+    setEmailSentTo(null)
     setError(null)
     setLoginMode('workspace')
   }
@@ -128,6 +160,7 @@ export default function LoginView() {
     }
 
     setEmailError(null)
+    setEmailSentTo(null)
     setError(null)
     setIsEmailSubmitting(true)
 
@@ -151,7 +184,7 @@ export default function LoginView() {
         identifier: normalizedEmail,
         redirectUrl,
       })
-      window.alert(`Dev: Magic sign-in link sent to ${normalizedEmail}.`)
+      setEmailSentTo(normalizedEmail)
       return
     } catch (signInError: unknown) {
       const { code, message } = getClerkError(signInError)
@@ -162,7 +195,7 @@ export default function LoginView() {
             strategy: 'email_link',
             redirectUrl,
           })
-          window.alert(`Dev: Magic sign-up link sent to ${normalizedEmail}.`)
+          setEmailSentTo(normalizedEmail)
           return
         } catch (signUpError: unknown) {
           const signUpInfo = getClerkError(signUpError)
@@ -173,10 +206,11 @@ export default function LoginView() {
                 identifier: normalizedEmail,
                 redirectUrl,
               })
-              window.alert(`Dev: Magic sign-in link sent to ${normalizedEmail}.`)
+              setEmailSentTo(normalizedEmail)
               return
             } catch (retryError: unknown) {
               const retryInfo = getClerkError(retryError)
+              setEmailSentTo(null)
               setEmailError(
                 retryInfo.message ??
                   'Unable to send a magic link right now. Please try again.',
@@ -185,6 +219,7 @@ export default function LoginView() {
             }
           }
 
+          setEmailSentTo(null)
           setEmailError(
             signUpInfo.message ??
               'Unable to create an account right now. Please try again.',
@@ -193,6 +228,7 @@ export default function LoginView() {
         }
       }
 
+      setEmailSentTo(null)
       setEmailError(
         message ?? 'Unable to send a magic link right now. Please try again.',
       )
@@ -293,149 +329,274 @@ export default function LoginView() {
     }
   }
 
+  const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!authLoaded || !isSignedIn) {
+      setProfileError('Authentication is not ready. Please try again.')
+      return
+    }
+
+    const trimmedName = profileName.trim()
+    if (!trimmedName) {
+      setProfileError('Enter your name to continue.')
+      return
+    }
+
+    setProfileError(null)
+    setIsProfileSubmitting(true)
+
+    try {
+      const response = await fetch('/api/auth/ensure-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName }),
+      })
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        const message =
+          payload?.error ??
+          'Unable to complete sign-in right now. Please try again.'
+        setProfileError(message)
+        return
+      }
+
+      if (payload?.needsProfile) {
+        setProfileError('Enter your name to continue.')
+        return
+      }
+
+      if (user?.reload) {
+        await user.reload()
+      }
+
+      router.replace('/workspace')
+    } catch (profileSetupError) {
+      console.error('Failed to complete profile setup', profileSetupError)
+      setProfileError('Unable to complete sign-in right now. Please try again.')
+    } finally {
+      setIsProfileSubmitting(false)
+    }
+  }
+
   return (
     <div
       className="flex min-h-screen items-center justify-center px-4 py-12 text-slate-900 sm:px-6 lg:px-8"
       style={pageBackgroundStyle}
     >
-      <div className="w-full max-w-xl">
-        {loginMode === 'email' ? (
-          <form
-            onSubmit={handleEmailSubmit}
-            className="flex flex-col rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/70 sm:p-8"
+      {!needsProfile && (
+        <div className="w-full max-w-xl">
+          {loginMode === 'email' ? (
+            <form
+              onSubmit={handleEmailSubmit}
+              className="flex flex-col rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/70 sm:p-8"
+            >
+              <div>
+                <h1 className="text-3xl font-semibold text-slate-900">EduCoder</h1>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-5">
+                <div className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
+                  <input
+                    type="email"
+                    name="email"
+                    value={emailEntry}
+                    onChange={(event) => {
+                      setEmailEntry(event.target.value)
+                      if (emailError) {
+                        setEmailError(null)
+                      }
+                      if (emailSentTo) {
+                        setEmailSentTo(null)
+                      }
+                    }}
+                    placeholder="Enter your email address"
+                    aria-label="Enter your email address"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
+                    autoComplete="email"
+                  />
+                </div>
+
+                {emailSentTo && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                    <p>
+                      We sent an email to you at{' '}
+                      <span className="font-semibold text-emerald-800">
+                        {emailSentTo}
+                      </span>
+                      .
+                    </p>
+                    <p className="mt-1 text-emerald-700">
+                      Click the link in the email to log in to your account.
+                    </p>
+                  </div>
+                )}
+
+                {emailError && (
+                  <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                    {emailError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isEmailSubmitting || !signInLoaded || !signUpLoaded}
+                  className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-500 to-sky-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-200/70 transition hover:from-indigo-500/90 hover:to-sky-500/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isEmailSubmitting
+                    ? 'Sending link…'
+                    : signInLoaded && signUpLoaded
+                      ? 'Continue'
+                      : 'Loading…'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleWorkspaceLoginClick}
+                  className="text-sm font-semibold text-slate-600 underline-offset-4 transition hover:text-slate-900"
+                >
+                  Join a workspace
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/70 sm:p-8"
+            >
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null)
+                    setEmailError(null)
+                    setLoginMode('email')
+                  }}
+                  className="inline-flex items-center justify-center text-slate-500 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                  aria-label="Back"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+                  Log into your workspace
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Use your assigned credentials to continue.
+                </p>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-5">
+                <div className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
+                  <div className="relative">
+                    <Users className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      name="username"
+                      value={formState.username}
+                      onChange={handleTextFieldChange}
+                      placeholder="Username"
+                      aria-label="Username"
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
+                      autoComplete="username"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      name="password"
+                      value={formState.password}
+                      onChange={handleTextFieldChange}
+                      placeholder="Password"
+                      aria-label="Password"
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !signInLoaded}
+                  className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-500 to-sky-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-200/70 transition hover:from-indigo-500/90 hover:to-sky-500/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <LogIn className="h-4 w-4" />
+                  {isSubmitting
+                    ? 'Signing in…'
+                    : signInLoaded
+                      ? 'Sign in'
+                      : 'Loading…'}
+                </button>
+
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+      {needsProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-xl rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-2xl shadow-slate-200/70 sm:p-8"
           >
             <div>
-              <h1 className="text-3xl font-semibold text-slate-900">EduCoder</h1>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                Finish setting up your account
+              </h2>
+              {profileEmail && (
+                <p className="mt-2 text-sm text-slate-500">
+                  Signed in as{' '}
+                  <span className="font-semibold text-slate-700">
+                    {profileEmail}
+                  </span>
+                </p>
+              )}
             </div>
-
-            <div className="mt-6 flex flex-col gap-5">
-              <label className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
-                Enter your email address
+            <form onSubmit={handleProfileSubmit} className="mt-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
                 <input
-                  type="email"
-                  name="email"
-                  value={emailEntry}
+                  type="text"
+                  name="name"
+                  value={profileName}
                   onChange={(event) => {
-                    setEmailEntry(event.target.value)
-                    if (emailError) {
-                      setEmailError(null)
+                    setProfileName(event.target.value)
+                    if (profileError) {
+                      setProfileError(null)
                     }
                   }}
-                  placeholder="you@school.org"
+                  placeholder="Enter your name"
+                  aria-label="Full name"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
-                  autoComplete="email"
+                  autoComplete="name"
                 />
-              </label>
-
-              {emailError && (
+              </div>
+              {profileError && (
                 <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
-                  {emailError}
+                  {profileError}
                 </p>
               )}
-
               <button
                 type="submit"
-                disabled={isEmailSubmitting || !signInLoaded || !signUpLoaded}
+                disabled={isProfileSubmitting}
                 className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-500 to-sky-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-200/70 transition hover:from-indigo-500/90 hover:to-sky-500/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isEmailSubmitting
-                  ? 'Sending link…'
-                  : signInLoaded && signUpLoaded
-                    ? 'Continue'
-                    : 'Loading…'}
+                {isProfileSubmitting ? 'Saving...' : 'Continue'}
               </button>
-
-              <button
-                type="button"
-                onClick={handleWorkspaceLoginClick}
-                className="text-sm font-semibold text-slate-600 underline-offset-4 transition hover:text-slate-900"
-              >
-                Join a workspace
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="flex flex-col rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl shadow-slate-200/70 sm:p-8"
-          >
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null)
-                  setEmailError(null)
-                  setLoginMode('email')
-                }}
-                className="inline-flex items-center justify-center text-slate-500 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                aria-label="Back"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <h2 className="mt-3 text-2xl font-semibold text-slate-900">
-                Log into your workspace
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Use your assigned credentials to continue.
-              </p>
-            </div>
-
-            <div className="mt-6 flex flex-col gap-5">
-              <label className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
-                Username
-                <div className="relative">
-                  <Users className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    name="username"
-                    value={formState.username}
-                    onChange={handleTextFieldChange}
-                    placeholder="e.g., facilitator@district.org"
-                    className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
-                    autoComplete="username"
-                  />
-                </div>
-              </label>
-
-              <label className="flex flex-col gap-2 text-sm font-semibold text-slate-600">
-                Password
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="password"
-                    name="password"
-                    value={formState.password}
-                    onChange={handleTextFieldChange}
-                    placeholder="Enter your password"
-                    className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
-                    autoComplete="current-password"
-                  />
-                </div>
-              </label>
-
-              {error && (
-                <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
-                  {error}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting || !signInLoaded}
-                className="mt-2 flex items-center justify-center gap-2 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-500 to-sky-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-200/70 transition hover:from-indigo-500/90 hover:to-sky-500/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <LogIn className="h-4 w-4" />
-                {isSubmitting
-                  ? 'Signing in…'
-                  : signInLoaded
-                    ? 'Sign in'
-                    : 'Loading…'}
-              </button>
-
-            </div>
-          </form>
-        )}
-      </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { redirect } from 'next/navigation'
+import { currentUser } from '@clerk/nextjs/server'
 import Sidebar from '@/components/admin/Sidebar'
 
 export const metadata: Metadata = {
@@ -7,11 +9,22 @@ export const metadata: Metadata = {
   description: 'Transcript annotation management system',
 }
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: ReactNode
 }) {
+  const user = await currentUser()
+  const role = (user?.publicMetadata?.role as string | undefined) ?? null
+
+  if (!user) {
+    redirect('/')
+  }
+
+  if (role !== 'admin') {
+    redirect('/workspace')
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
