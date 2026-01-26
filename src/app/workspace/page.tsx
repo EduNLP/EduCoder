@@ -4,6 +4,8 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Eye,
+  EyeOff,
   ListFilter,
   LogOut,
   Search,
@@ -90,8 +92,7 @@ const formatRelativeTime = (value: string | null) => {
 export default function DashboardPage() {
   const router = useRouter()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
-  const { isLoaded: userLoaded, user } = useUser()
-  const role = (user?.publicMetadata?.role as string | undefined) ?? null
+  const { isLoaded: userLoaded } = useUser()
   const { theme } = useTheme()
   const [toolbarVisible, setToolbarVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -121,6 +122,18 @@ export default function DashboardPage() {
       backgroundImage: theme.backgroundImage ?? 'none',
     }),
     [theme],
+  )
+
+  const workspaceMenuLinks = useMemo(
+    () => [
+      {
+        id: 'toggle-toolbar',
+        label: toolbarVisible ? 'Hide search & filters' : 'Show search & filters',
+        icon: toolbarVisible ? EyeOff : Eye,
+      },
+      { id: 'logout', label: 'Log Out', icon: LogOut },
+    ],
+    [toolbarVisible],
   )
 
   const updateTileHeight = useCallback(() => {
@@ -158,10 +171,7 @@ export default function DashboardPage() {
       return
     }
 
-    if (role === 'admin') {
-      router.replace('/admin')
-    }
-  }, [authLoaded, isSignedIn, role, router, userLoaded])
+  }, [authLoaded, isSignedIn, router, userLoaded])
 
   useEffect(() => {
     let isCancelled = false
@@ -227,7 +237,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (!isSignedIn || role === 'admin') {
+  if (!isSignedIn) {
     return (
       <div
         className="flex min-h-screen items-center justify-center px-3 py-6 text-slate-900 sm:px-4 lg:px-6"
@@ -247,6 +257,12 @@ export default function DashboardPage() {
     router.push(`${destination}?transcript=${tile.transcriptId}`)
   }
 
+  const handleMenuLinkAction = (link: { id: string }) => {
+    if (link.id === 'toggle-toolbar') {
+      handleToggleToolbar()
+    }
+  }
+
   return (
     <div
       className="flex min-h-screen flex-col px-3 py-6 text-slate-900 sm:px-4 lg:px-6"
@@ -258,7 +274,11 @@ export default function DashboardPage() {
           onToggleToolbar={handleToggleToolbar}
           showWorkspaceButton={false}
           leftLabel="workspace"
-          menuLinks={[{ id: 'logout', label: 'Log Out', icon: LogOut }]}
+          showToolbarToggleButton={false}
+          showCommandCenterCloseButton={false}
+          showCommandCenterHeading={false}
+          menuLinks={workspaceMenuLinks}
+          onMenuLinkClick={handleMenuLinkAction}
         />
 
         {toolbarVisible && (

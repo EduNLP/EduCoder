@@ -9,7 +9,30 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   try {
+    const { userId: authUserId } = await auth()
+    if (!authUserId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const actor = await prisma.user.findFirst({
+      where: { auth_user_id: authUserId },
+      select: { id: true, workspace_id: true },
+    })
+
+    if (!actor) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authenticated user is not registered in the application database.',
+        },
+        { status: 403 },
+      )
+    }
+
     const transcripts = await prisma.transcripts.findMany({
+      where: {
+        workspace_id: actor.workspace_id,
+      },
       select: {
         id: true,
         title: true,
@@ -77,7 +100,7 @@ export async function DELETE(request: Request) {
     const uploaderWhere = { auth_user_id: authUserId } as Prisma.UserWhereInput
     const uploader = await prisma.user.findFirst({
       where: uploaderWhere,
-      select: { id: true },
+      select: { id: true, workspace_id: true },
     })
 
     if (!uploader) {
@@ -98,6 +121,7 @@ export async function DELETE(request: Request) {
       where: { id: transcriptId },
       select: {
         id: true,
+        workspace_id: true,
         video_id: true,
         video: {
           select: {
@@ -110,6 +134,10 @@ export async function DELETE(request: Request) {
 
     if (!transcript) {
       return NextResponse.json({ error: 'Transcript not found.' }, { status: 404 })
+    }
+
+    if (transcript.workspace_id !== uploader.workspace_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     if (!transcript.video_id || !transcript.video) {

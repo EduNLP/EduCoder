@@ -1,7 +1,7 @@
 'use client'
 
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const WHITE_VIDEO_POSTER =
   'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect width=%2216%22 height=%229%22 fill=%22white%22/%3E%3C/svg%3E'
@@ -43,6 +43,17 @@ export function VideoAnnotatePlayer({
 
   const shouldShowPlayOverlay =
     Boolean(src) && !hasPlayedOnce && showVideoPlayOverlay
+  const resolvedMimeType = useMemo(() => {
+    const rawMimeType = mimeType?.trim().toLowerCase()
+    if (!rawMimeType) return 'video/mp4'
+    if (typeof document === 'undefined') {
+      return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+    }
+
+    const canPlay = document.createElement('video').canPlayType(rawMimeType)
+    if (canPlay) return rawMimeType
+    return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+  }, [mimeType])
   const resolvedDuration =
     typeof videoDuration === 'number' && Number.isFinite(videoDuration)
       ? videoDuration
@@ -234,7 +245,7 @@ export function VideoAnnotatePlayer({
         onEnded={handleVideoPause}
         onLoadedMetadata={handleVideoLoadedMetadata}
       >
-        {src ? <source src={src} type={mimeType} /> : null}
+        {src ? <source src={src} type={resolvedMimeType} /> : null}
         Your browser does not support the video tag.
       </video>
       {!src && (

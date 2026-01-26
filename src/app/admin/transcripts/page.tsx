@@ -488,34 +488,6 @@ export default function TranscriptsPage() {
                 </div>
               </div>
 
-              {/* LLM Annotations */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">LLM Annotations</p>
-                    <p
-                      id={`llm-annotations-help-${transcript.id}`}
-                      className="text-xs text-gray-500 mt-1"
-                    >
-                      Show or hide LLM annotations for annotators
-                    </p>
-                  </div>
-                  <label
-                    className="relative inline-flex items-center cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      defaultChecked={transcript.llm_annotation}
-                      aria-label="LLM Annotations"
-                      aria-describedby={`llm-annotations-help-${transcript.id}`}
-                    />
-                    <div className="w-11 h-6 rounded-full bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-500 peer-checked:bg-primary-600 transition-colors" />
-                    <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
-                  </label>
-                </div>
-              </div>
-
               {/* Annotators */}
               <div className="mb-4">
                 <p className="text-sm font-medium text-gray-700 mb-2">

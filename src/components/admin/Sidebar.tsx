@@ -2,10 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FileText, Users, Settings, LogOut, FileCheck, ScrollText, Video, Sparkles } from 'lucide-react'
+import { FileText, Users, Settings, LogOut, FileCheck, ScrollText, Video, Sparkles, LayoutGrid } from 'lucide-react'
 import { useClerk } from '@clerk/nextjs'
 
 const menuItems = [
+  {
+    name: 'Workspace',
+    href: '/workspace',
+    icon: LayoutGrid,
+  },
   {
     name: 'Transcripts',
     href: '/admin/transcripts',
@@ -25,6 +30,7 @@ const menuItems = [
     name: 'LLM Annotations',
     href: '/admin/llm-annotations',
     icon: Sparkles,
+    isTemporarilyHidden: true,
   },
   {
     name: 'Videos',
@@ -35,11 +41,13 @@ const menuItems = [
     name: 'Logs',
     href: '/admin/logs',
     icon: ScrollText,
+    isTemporarilyHidden: true,
   },
   {
     name: 'Settings',
     href: '/admin/settings',
     icon: Settings,
+    isTemporarilyHidden: true,
   },
 ]
 
@@ -67,7 +75,9 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="p-4 space-y-2">
-        {menuItems.map((item) => {
+        {menuItems
+          .filter((item) => !item.isTemporarilyHidden)
+          .map((item) => {
           const isActive = pathname?.startsWith(item.href)
           const Icon = item.icon
           

@@ -12,24 +12,40 @@ datasource db {
   provider = "postgresql"
 }
 
+model Workspace {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  transcripts Transcripts[]
+
+  @@map("Workspaces")
+}
+
 
 model User {
-  id         String        @id @default(uuid()) @db.Uuid
-  name       String
-  username   String        @unique
-  password   String
-  auth_user_id String?     @unique
-  role       Role          @default(user)
-  createdAt  DateTime      @default(now())
-  lastLogin  DateTime?
-  transcripts Transcripts[]
-  annotations Annotations[]
-  notes      Notes[]
+  id            String   @id @default(uuid()) @db.Uuid
+  workspace_id  String   @db.Uuid
+  name          String
+  username      String
+  password      String
+  auth_user_id  String?  @unique
+  role          Role     @default(user)
+  createdAt     DateTime @default(now())
+  lastLogin     DateTime?
+  workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  transcripts   Transcripts[]
+  annotations   Annotations[]
+  notes         Notes[]
   flagAssignments FlagAssignments[]
+
+  @@unique([workspace_id, username])
 }
 
 model Transcripts {
   id                          String   @id @default(uuid()) @db.Uuid
+  workspace_id                String   @db.Uuid
   uploaded_by                 String   @db.Uuid
   title                       String
   grade                       String?
@@ -43,6 +59,7 @@ model Transcripts {
   annotation_file_name        String?   @db.Text
   llm_annotation_gcs_path     String?  @db.Text
   instructional_material_link String? @db.Text
+  workspace                   Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
   uploader                    User    @relation(fields: [uploaded_by], references: [id])
   video                       Videos? @relation("TranscriptVideo", fields: [video_id], references: [id])
   materials                   InstructionalMaterial[]

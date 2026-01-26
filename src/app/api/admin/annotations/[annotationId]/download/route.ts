@@ -248,9 +248,9 @@ export async function GET(request: Request, context: RouteContext) {
     const notesHeader = [
       'Note ID',
       'Title',
-      'What are students saying in the selected piece(s) of evidence?',
-      'What would you like to note about this utterance?',
-      "What does this utterance reveal about the student's thinking or understanding?",
+      'What are the students saying or doing?',
+      'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
+      'What possible teacher responses would you do?',
     ]
     const notesRows: (string | number)[][] = [
       notesHeader,
