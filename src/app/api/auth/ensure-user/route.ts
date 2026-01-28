@@ -3,7 +3,9 @@ import { auth, clerkClient } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 
-const DEFAULT_ROLE = 'admin' as const
+const DEFAULT_ROLE = 'annotator' as const
+const DEFAULT_TRANSCRIPT_ASSIGNMENT_ID =
+  '44993c55-0f2e-4ba2-b58f-57d97f97be62'
 
 const buildDisplayName = (input: {
   firstName?: string | null
@@ -103,6 +105,23 @@ export async function POST(request: Request) {
           role: DEFAULT_ROLE,
           auth_user_id: userId,
           workspace_id: workspace.id,
+        },
+      })
+
+      const transcript = await tx.transcripts.findUnique({
+        where: { id: DEFAULT_TRANSCRIPT_ASSIGNMENT_ID },
+        select: { id: true },
+      })
+
+      if (!transcript) {
+        throw new Error('Default transcript assignment could not be found.')
+      }
+
+      await tx.annotations.create({
+        data: {
+          transcript_id: transcript.id,
+          created_for: user.id,
+          gcs_path: '',
         },
       })
 
