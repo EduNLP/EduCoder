@@ -30,7 +30,6 @@ const menuItems = [
     name: 'LLM Annotations',
     href: '/admin/llm-annotations',
     icon: Sparkles,
-    isTemporarilyHidden: true,
   },
   {
     name: 'Videos',

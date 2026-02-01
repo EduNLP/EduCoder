@@ -10,6 +10,8 @@ import {
   Paperclip,
   Eye,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import {
   SPREADSHEET_ACCEPT,
@@ -51,9 +53,10 @@ type LlmAnnotationSettings = {
 }
 
 const SAMPLE_VISIBILITY_ANNOTATORS = [
-  { id: 'annotator-1', name: 'Jordan Lee', defaultVisibility: 'after' },
-  { id: 'annotator-2', name: 'Riley Chen', defaultVisibility: 'always' },
-  { id: 'annotator-3', name: 'Morgan Patel', defaultVisibility: 'hide' },
+  { id: 'annotator-1', name: 'Jordan Lee', visibility: 'inherit' },
+  { id: 'annotator-2', name: 'Riley Chen', visibility: 'after' },
+  { id: 'annotator-3', name: 'Morgan Patel', visibility: 'never' },
+  { id: 'annotator-4', name: 'Taylor Nguyen', visibility: 'always' },
 ]
 
 const DEFAULT_LLM_SETTINGS: LlmAnnotationSettings = {
@@ -102,6 +105,8 @@ export default function LlmAnnotationsPage() {
   const [attachError, setAttachError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [settingsTranscript, setSettingsTranscript] = useState<TranscriptRecord | null>(null)
   const [visibilityTranscript, setVisibilityTranscript] = useState<TranscriptRecord | null>(null)
+  const [defaultVisibility, setDefaultVisibility] = useState<'never' | 'after' | 'always'>('always')
+  const [showAnnotatorOverrides, setShowAnnotatorOverrides] = useState(false)
   const [llmSettingsByTranscriptId, setLlmSettingsByTranscriptId] = useState<
     Record<string, LlmAnnotationSettings>
   >({})
@@ -311,6 +316,16 @@ export default function LlmAnnotationsPage() {
     })
   }
 
+  const openVisibilityModal = (transcript: TranscriptRecord) => {
+    setVisibilityTranscript(transcript)
+    setShowAnnotatorOverrides(false)
+  }
+
+  const closeVisibilityModal = () => {
+    setVisibilityTranscript(null)
+    setShowAnnotatorOverrides(false)
+  }
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -480,7 +495,7 @@ export default function LlmAnnotationsPage() {
                       </label>
                     </div>
                     <button
-                      onClick={() => setVisibilityTranscript(transcript)}
+                      onClick={() => openVisibilityModal(transcript)}
                       className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                     >
                       <Eye className="w-4 h-4" />
@@ -522,7 +537,7 @@ export default function LlmAnnotationsPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div
             className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-            onClick={() => setVisibilityTranscript(null)}
+            onClick={closeVisibilityModal}
           />
 
           <div className="flex min-h-full items-center justify-center p-4">
@@ -530,14 +545,14 @@ export default function LlmAnnotationsPage() {
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    Annotation Modal Setting
+                    LLM Annotation Visibility
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    Control when LLM-generated annotations are visible to each annotator
+                    Choose the default visibility and optionally customize it per annotator.
                   </p>
                 </div>
                 <button
-                  onClick={() => setVisibilityTranscript(null)}
+                  onClick={closeVisibilityModal}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -545,65 +560,144 @@ export default function LlmAnnotationsPage() {
               </div>
 
               <div className="p-6">
-                <div className="overflow-x-auto rounded-lg border border-gray-200">
-                  <table className="min-w-full text-sm text-gray-700">
-                    <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold">Annotator</th>
-                        <th className="px-4 py-3 text-center font-semibold">Hide</th>
-                        <th className="px-4 py-3 text-center font-semibold">After Completion</th>
-                        <th className="px-4 py-3 text-center font-semibold">Always Show</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {SAMPLE_VISIBILITY_ANNOTATORS.map((annotator) => (
-                        <tr key={annotator.id} className="bg-white">
-                          <td className="px-4 py-4 font-medium text-gray-900">
-                            {annotator.name}
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <input
-                              type="radio"
-                              name={`visibility-${annotator.id}`}
-                              defaultChecked={annotator.defaultVisibility === 'hide'}
-                              className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                              aria-label={`Hide LLM annotations for ${annotator.name}`}
-                            />
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <input
-                              type="radio"
-                              name={`visibility-${annotator.id}`}
-                              defaultChecked={annotator.defaultVisibility === 'after'}
-                              className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                              aria-label={`Show LLM annotations after completion for ${annotator.name}`}
-                            />
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <input
-                              type="radio"
-                              name={`visibility-${annotator.id}`}
-                              defaultChecked={annotator.defaultVisibility === 'always'}
-                              className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                              aria-label={`Always show LLM annotations for ${annotator.name}`}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-5">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-sm font-semibold text-gray-900">
+                      LLM Annotation Visibility (Default)
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <label className="flex items-center gap-3 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="llm-visibility-default"
+                          checked={defaultVisibility === 'never'}
+                          onChange={() => setDefaultVisibility('never')}
+                          className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        />
+                        Hidden
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="llm-visibility-default"
+                          checked={defaultVisibility === 'after'}
+                          onChange={() => setDefaultVisibility('after')}
+                          className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        />
+                        Visible after completion
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-gray-700">
+                        <input
+                          type="radio"
+                          name="llm-visibility-default"
+                          checked={defaultVisibility === 'always'}
+                          onChange={() => setDefaultVisibility('always')}
+                          className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                        />
+                        Always visible
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3">
+                      This setting applies to all annotators unless overridden.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowAnnotatorOverrides((current) => !current)}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                      aria-expanded={showAnnotatorOverrides}
+                      aria-controls="annotator-visibility-grid"
+                    >
+                      <span>Customize per annotator</span>
+                      {showAnnotatorOverrides ? (
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+
+                  {showAnnotatorOverrides && (
+                    <div
+                      id="annotator-visibility-grid"
+                      className="overflow-x-auto rounded-lg border border-gray-200"
+                    >
+                      <table className="min-w-full text-sm text-gray-700">
+                        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-semibold">Annotator</th>
+                            <th className="px-4 py-3 text-center font-semibold">Inherit default</th>
+                            <th className="px-4 py-3 text-center font-semibold">Hidden</th>
+                            <th className="px-4 py-3 text-center font-semibold">
+                              Visible after completion
+                            </th>
+                            <th className="px-4 py-3 text-center font-semibold">
+                              Always visible
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {SAMPLE_VISIBILITY_ANNOTATORS.map((annotator) => (
+                            <tr key={annotator.id} className="bg-white">
+                              <td className="px-4 py-4 font-medium text-gray-900">
+                                {annotator.name}
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <input
+                                  type="radio"
+                                  name={`visibility-${annotator.id}`}
+                                  defaultChecked={annotator.visibility === 'inherit'}
+                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                  aria-label={`Use default visibility for ${annotator.name}`}
+                                />
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <input
+                                  type="radio"
+                                  name={`visibility-${annotator.id}`}
+                                  defaultChecked={annotator.visibility === 'never'}
+                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                  aria-label={`Hide LLM annotations for ${annotator.name}`}
+                                />
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <input
+                                  type="radio"
+                                  name={`visibility-${annotator.id}`}
+                                  defaultChecked={annotator.visibility === 'after'}
+                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                  aria-label={`Show LLM annotations after completion for ${annotator.name}`}
+                                />
+                              </td>
+                              <td className="px-4 py-4 text-center">
+                                <input
+                                  type="radio"
+                                  name={`visibility-${annotator.id}`}
+                                  defaultChecked={annotator.visibility === 'always'}
+                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                  aria-label={`Always show LLM annotations for ${annotator.name}`}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-gray-200 p-6 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => setVisibilityTranscript(null)}
+                  onClick={closeVisibilityModal}
                   className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => setVisibilityTranscript(null)}
+                  onClick={closeVisibilityModal}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
                   Save changes
