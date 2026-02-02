@@ -49,7 +49,8 @@ type LlmAnnotationSettings = {
   scope: 'all' | 'range'
   startLine: string
   endLine: string
-  prompt: string
+  noteCreationPrompt: string
+  noteAssignmentPrompt: string
 }
 
 const SAMPLE_VISIBILITY_ANNOTATORS = [
@@ -63,7 +64,8 @@ const DEFAULT_LLM_SETTINGS: LlmAnnotationSettings = {
   scope: 'all',
   startLine: '',
   endLine: '',
-  prompt: '',
+  noteCreationPrompt: '',
+  noteAssignmentPrompt: '',
 }
 
 const parseFileNameFromContentDisposition = (header: string | null) => {
@@ -719,9 +721,9 @@ export default function LlmAnnotationsPage() {
             <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">LLM Settings</h2>
+                  <h2 className="text-xl font-bold text-gray-900">LLM Annotation Settings</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {settingsTranscript.title}
+                    Define how notes should be generated and assigned.
                   </p>
                 </div>
                 <button
@@ -808,22 +810,44 @@ export default function LlmAnnotationsPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-semibold text-gray-900">
-                    LLM prompt
-                    <textarea
-                      value={llmSettingsByTranscriptId[settingsTranscript.id]?.prompt ?? ''}
-                      onChange={(event) =>
-                        updateLlmSettings(settingsTranscript.id, { prompt: event.target.value })
-                      }
-                      rows={5}
-                      placeholder="Describe how the LLM should annotate the transcript..."
-                      className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    />
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    This prompt is used when generating annotations for the selected lines.
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-900">
+                      Note Creation
+                      <textarea
+                        value={
+                          llmSettingsByTranscriptId[settingsTranscript.id]?.noteCreationPrompt ?? ''
+                        }
+                        onChange={(event) =>
+                          updateLlmSettings(settingsTranscript.id, {
+                            noteCreationPrompt: event.target.value,
+                          })
+                        }
+                        rows={4}
+                        placeholder="Describe how notes should be generated..."
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-900">
+                      Note Assignment
+                      <textarea
+                        value={
+                          llmSettingsByTranscriptId[settingsTranscript.id]?.noteAssignmentPrompt ?? ''
+                        }
+                        onChange={(event) =>
+                          updateLlmSettings(settingsTranscript.id, {
+                            noteAssignmentPrompt: event.target.value,
+                          })
+                        }
+                        rows={4}
+                        placeholder="Describe how each generated note should be assigned..."
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

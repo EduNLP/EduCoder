@@ -511,7 +511,7 @@ function AnnotationPageContent() {
     startY: 0,
   })
   const skipClickRef = useRef<string | null>(null)
-  const showLlmNotesMenu = false // Temporary: hide LLM notes toggle from the menu.
+  const showLlmNotesMenu = true
 
   const selectRow = useCallback((rowId: string) => {
     setCheckedRows({})
@@ -2016,26 +2016,6 @@ function AnnotationPageContent() {
 
           <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
             <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70">
-              {!hasMultipleSegments && (
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-slate-500">
-                      Transcript table
-                    </p>
-                  </div>
-                  <p className="text-sm text-slate-500">
-                    {isLoadingTranscript
-                      ? 'Loading transcript lines…'
-                      : transcriptError
-                        ? 'Unable to load transcript'
-                      : transcriptRows.length > 0
-                          ? `${filteredRows.length} of ${visibleRowTotal} lines visible`
-                      : transcriptMeta
-                        ? 'No lines available for this transcript'
-                        : 'Waiting for transcript selection'}
-                  </p>
-                </div>
-              )}
               {hasMultipleSegments && (
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 text-sm font-semibold text-slate-700">
                   <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">

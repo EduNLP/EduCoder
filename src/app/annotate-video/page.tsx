@@ -622,7 +622,7 @@ function AnnotationPageContent() {
     startY: 0,
   })
   const skipClickRef = useRef<string | null>(null)
-  const showLlmNotesMenu = false // Temporary: hide LLM notes toggle from the menu.
+  const showLlmNotesMenu = true
 
   const selectRow = useCallback((rowId: string) => {
     setCheckedRows({})
@@ -1791,9 +1791,28 @@ function AnnotationPageContent() {
   const lineColumnWidth = '6.5rem'
   const speakerColumnWidth = '8.25rem'
   const noteColumnWidth = '12rem'
+  const hasVideo = Boolean(videoSource?.url)
+  const isTranscriptEmpty = hasVideo
+    ? activeSegmentRows.length === 0
+    : transcriptRows.length === 0
+  const hasRowsForFilters = hasVideo
+    ? activeSegmentRows.length > 0
+    : transcriptRows.length > 0
+  const tableHeadClass = hasVideo
+    ? 'rounded-2xl bg-white'
+    : 'sticky top-0 z-20 rounded-2xl bg-white/95 backdrop-blur'
+  const lineHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky left-0 top-0 z-30 bg-white px-3 py-3 backdrop-blur'
+  const speakerHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky top-0 z-30 bg-white px-3 py-3 backdrop-blur'
+  const standardHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky top-0 z-10 bg-white px-3 py-3'
   const activeSegmentLabel = hasMultipleSegments
     ? `Section ${activeSegmentIndex + 1} of ${transcriptSegments.length}`
-    : 'Video'
+    : null
   const hasPreviousSegment = hasMultipleSegments && activeSegmentIndex > 0
   const hasNextSegment =
     hasMultipleSegments && activeSegmentIndex < transcriptSegments.length - 1
@@ -1802,7 +1821,7 @@ function AnnotationPageContent() {
       ? Math.min(segmentPlaybackTime, segmentDuration)
       : 0
   const isSegmentSeekEnabled =
-    Boolean(videoSource?.url) && Boolean(segmentDuration && segmentDuration > 0)
+    hasVideo && Boolean(segmentDuration && segmentDuration > 0)
   const resolvedVideoMimeType = useMemo(() => {
     const rawMimeType = videoSource?.mimeType?.trim().toLowerCase()
     if (!rawMimeType) return 'video/mp4'
@@ -1815,7 +1834,7 @@ function AnnotationPageContent() {
     return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
   }, [videoSource?.mimeType])
   const shouldShowPlayOverlay =
-    Boolean(videoSource?.url) && !hasPlayedOnce && showVideoPlayOverlay
+    hasVideo && !hasPlayedOnce && showVideoPlayOverlay
 
   const handleInstructionImageClick = useCallback((card: InstructionCard) => {
     setActiveInstructionImage({ src: card.imageUrl, title: card.title })
@@ -2738,301 +2757,339 @@ function AnnotationPageContent() {
           </aside>
 
           <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-            <div className="relative flex min-h-0 flex-1 flex-col gap-3 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70">
-              <div
-                className={`flex flex-col gap-3 transition-all duration-300 ${
-                  isPictureInPicture
-                    ? 'absolute left-0 top-0 invisible pointer-events-none'
-                    : ''
-                }`}
-                aria-hidden={isPictureInPicture}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-0 text-sm font-semibold text-slate-700">
-                  <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
-                    {activeSegmentLabel}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {hasPreviousSegment && (
-                      <button
-                        type="button"
-                        onClick={() => handleSegmentNavigate(-1)}
-                        aria-label="Previous section"
-                        className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                    )}
-                    {hasNextSegment && (
-                      <button
-                        type="button"
-                        onClick={() => handleSegmentNavigate(1)}
-                        aria-label="Next section"
-                        className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+            <div
+              className={`flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70 ${
+                hasVideo ? 'relative gap-3' : ''
+              }`}
+            >
+              {hasVideo ? (
                 <div
-                  ref={videoContainerRef}
-                  className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white"
-                  onMouseEnter={() => {
-                    if (!hasPlayedOnce) return
-                    setShowVideoControls(true)
-                  }}
-                  onMouseLeave={() => {
-                    if (!hasPlayedOnce || isCoarsePointer) return
-                    setShowVideoControls(false)
-                  }}
-                  onFocusCapture={() => {
-                    if (!hasPlayedOnce) return
-                    setShowVideoControls(true)
-                  }}
-                  onBlurCapture={(event) => {
-                    if (!hasPlayedOnce || isCoarsePointer) return
-                    const nextTarget = event.relatedTarget as Node | null
-                    if (nextTarget && event.currentTarget.contains(nextTarget)) {
-                      return
-                    }
-                    setShowVideoControls(false)
-                  }}
-                  onTouchStart={() => {
-                    if (!hasPlayedOnce) return
-                    setShowVideoControls(true)
-                  }}
+                  className={`flex flex-col gap-3 transition-all duration-300 ${
+                    isPictureInPicture
+                      ? 'absolute left-0 top-0 invisible pointer-events-none'
+                      : ''
+                  }`}
+                  aria-hidden={isPictureInPicture}
                 >
-                  {timelineNoteFilter && timelineTrackDuration && (
-                    <div
-                      className={`pointer-events-none absolute inset-x-4 ${
-                        showVideoControls ? 'bottom-16' : 'bottom-3'
-                      } z-30 h-2 overflow-visible`}
-                    >
-                      {timelineNoteSegments.map((segment, index) => {
-                        const startPercent = Math.max(
-                          0,
-                          (segment.start / timelineTrackDuration) * 100,
-                        )
-                        const clampedStart = Math.min(100, startPercent)
-                        const endPercent = Math.min(
-                          100,
-                          (segment.end / timelineTrackDuration) * 100,
-                        )
-                        const widthPercent = Math.min(
-                          Math.max(endPercent - clampedStart, 0.8),
-                          100 - clampedStart,
-                        )
-                        return (
-                          <span
-                            key={`${segment.rowId}-${index}`}
-                            className={`absolute top-0 bottom-0 rounded-full shadow-sm shadow-slate-900/30 ${timelineHighlightColorClass}`}
-                            style={{
-                              left: `${clampedStart}%`,
-                              width: `${widthPercent}%`,
-                              opacity: 0.9,
-                            }}
-                          />
-                        )
-                      })}
-                    </div>
-                  )}
-                  <video
-                    key={videoSource?.url ?? 'empty-video'}
-                    ref={videoRef}
-                    className="video-annotate-player h-full w-full max-h-[360px] bg-white"
-                    data-controls-visible={showVideoControls ? 'true' : 'false'}
-                    tabIndex={isPictureInPicture ? -1 : 0}
-                    controls={false}
-                    playsInline
-                    preload="metadata"
-                    poster={WHITE_VIDEO_POSTER}
-                    onContextMenu={(event) => event.preventDefault()}
-                    onClick={handleTogglePlayback}
-                    onPlay={handleVideoPlay}
-                    onPause={handleVideoPause}
-                    onEnded={handleVideoPause}
-                    onLoadedMetadata={handleVideoLoadedMetadata}
-                  >
-                    {videoSource?.url ? (
-                      <source
-                        src={videoSource.url}
-                        type={resolvedVideoMimeType}
-                      />
-                    ) : null}
-                    Your browser does not support the video tag.
-                  </video>
-                  {!isLoadingTranscript && !videoSource?.url && (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm shadow-slate-200/70">
-                        {videoSourceError ?? 'No video uploaded for this transcript.'}
+                  {hasMultipleSegments && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-0 text-sm font-semibold text-slate-700">
+                      <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
+                        {activeSegmentLabel}
                       </span>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleVideoPlayClick}
-                    aria-label="Play video"
-                    className={`absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/30 text-white shadow-[0_10px_30px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
-                      shouldShowPlayOverlay
-                        ? ''
-                        : 'pointer-events-none opacity-0'
-                    }`}
-                    aria-hidden={!shouldShowPlayOverlay}
-                    tabIndex={shouldShowPlayOverlay ? 0 : -1}
-                  >
-                    <svg
-                      width="22"
-                      height="26"
-                      viewBox="0 0 22 26"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M5 4.2c0-1.18 1.3-1.9 2.34-1.2l11.2 7a1.5 1.5 0 0 1 0 2.6l-11.2 7c-1.04.66-2.34-.06-2.34-1.26V4.2Z"
-                      />
-                    </svg>
-                  </button>
-                  {videoSource?.url && (
-                    <div
-                      className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-4 pb-3 pt-8 text-white transition duration-200 ${
-                        showVideoControls ? 'opacity-100' : 'pointer-events-none opacity-0'
-                      }`}
-                    >
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/80 via-slate-950/40 to-transparent" />
-                      <input
-                        type="range"
-                        min={0}
-                        max={segmentDuration ?? 0}
-                        step={0.1}
-                        value={segmentPlaybackValue}
-                        onChange={(event) =>
-                          handleSegmentSeek(Number(event.target.value))
-                        }
-                        disabled={!isSegmentSeekEnabled}
-                        className="relative z-10 h-1 w-full cursor-pointer accent-white/90"
-                        aria-label="Seek within segment"
-                      />
-                      <div className="relative z-10 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        {hasPreviousSegment && (
                           <button
                             type="button"
-                            onClick={handleTogglePlayback}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                            aria-label={isVideoPlaying ? 'Pause video' : 'Play video'}
+                            onClick={() => handleSegmentNavigate(-1)}
+                            aria-label="Previous section"
+                            className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                           >
-                            {isVideoPlaying ? (
-                              <Pause className="h-4 w-4" />
-                            ) : (
-                              <Play className="h-4 w-4" />
-                            )}
+                            <ChevronLeft className="h-4 w-4" />
                           </button>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleToggleMute}
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                              aria-label={isVideoMuted ? 'Unmute video' : 'Mute video'}
-                            >
-                              {isVideoMuted || videoVolume === 0 ? (
-                                <VolumeX className="h-4 w-4" />
-                              ) : (
-                                <Volume2 className="h-4 w-4" />
-                              )}
-                            </button>
-                            <input
-                              type="range"
-                              min={0}
-                              max={1}
-                              step={0.01}
-                              value={videoVolume}
-                              onChange={(event) =>
-                                handleVolumeChange(Number(event.target.value))
-                              }
-                              className="h-1 w-20 cursor-pointer accent-white/90"
-                              aria-label="Adjust volume"
-                            />
-                          </div>
-                          <span className="text-xs font-mono text-white/80">
-                            {formatTimestamp(segmentPlaybackValue)} /{' '}
-                            {formatTimestamp(segmentDuration)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="relative" ref={timelineSettingsRef}>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTimelineSettingsOpen((open) => !open)
-                              }
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                              aria-label="Timeline highlight settings"
-                              aria-expanded={timelineSettingsOpen}
-                              aria-controls="timeline-highlight-panel"
-                            >
-                              <Settings className="h-4 w-4" />
-                            </button>
-                            {timelineSettingsOpen && (
-                              <div
-                                id="timeline-highlight-panel"
-                                className="absolute bottom-full right-0 z-30 mb-3 w-56 rounded-2xl border border-slate-200 bg-white/80 p-3 text-slate-700 shadow-xl shadow-slate-900/10 backdrop-blur-md"
-                              >
-                                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                                  Timeline highlight
-                                </p>
-                                <p className="mt-0.5 text-xs text-slate-500">
-                                  Show where a note tag appears across the
-                                  video.
-                                </p>
-                                <div className="mt-2 space-y-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTimelineNoteSelect(null)}
-                                    className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
-                                      timelineNoteFilter === null
-                                        ? 'border border-slate-200 bg-slate-50 text-slate-900 shadow-sm'
-                                        : 'text-slate-600 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    <span>Hide highlights</span>
-                                    {timelineNoteFilter === null && (
-                                      <Check className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                  {noteBadges.map((note) => {
-                                    const isActive =
-                                      timelineNoteFilter === note.id
-                                    return (
-                                      <button
-                                        key={note.id}
-                                        type="button"
-                                        onClick={() =>
-                                          handleTimelineNoteSelect(note.id)
-                                        }
-                                        className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
-                                          isActive
-                                            ? 'border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
-                                            : 'text-slate-600 hover:bg-slate-50'
-                                        }`}
-                                      >
-                                        <span className="text-left">
-                                          Show "{note.label}" on timeline
-                                        </span>
-                                        {isActive && (
-                                          <Check className="h-4 w-4" />
-                                        )}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        )}
+                        {hasNextSegment && (
+                          <button
+                            type="button"
+                            onClick={() => handleSegmentNavigate(1)}
+                            aria-label="Next section"
+                            className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
+                  <div
+                    ref={videoContainerRef}
+                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                    onMouseEnter={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                    onMouseLeave={() => {
+                      if (!hasPlayedOnce || isCoarsePointer) return
+                      setShowVideoControls(false)
+                    }}
+                    onFocusCapture={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                    onBlurCapture={(event) => {
+                      if (!hasPlayedOnce || isCoarsePointer) return
+                      const nextTarget = event.relatedTarget as Node | null
+                      if (nextTarget && event.currentTarget.contains(nextTarget)) {
+                        return
+                      }
+                      setShowVideoControls(false)
+                    }}
+                    onTouchStart={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                  >
+                    {timelineNoteFilter && timelineTrackDuration && (
+                      <div
+                        className={`pointer-events-none absolute inset-x-4 ${
+                          showVideoControls ? 'bottom-16' : 'bottom-3'
+                        } z-30 h-2 overflow-visible`}
+                      >
+                        {timelineNoteSegments.map((segment, index) => {
+                          const startPercent = Math.max(
+                            0,
+                            (segment.start / timelineTrackDuration) * 100,
+                          )
+                          const clampedStart = Math.min(100, startPercent)
+                          const endPercent = Math.min(
+                            100,
+                            (segment.end / timelineTrackDuration) * 100,
+                          )
+                          const widthPercent = Math.min(
+                            Math.max(endPercent - clampedStart, 0.8),
+                            100 - clampedStart,
+                          )
+                          return (
+                            <span
+                              key={`${segment.rowId}-${index}`}
+                              className={`absolute top-0 bottom-0 rounded-full shadow-sm shadow-slate-900/30 ${timelineHighlightColorClass}`}
+                              style={{
+                                left: `${clampedStart}%`,
+                                width: `${widthPercent}%`,
+                                opacity: 0.9,
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    )}
+                    <video
+                      key={videoSource?.url ?? 'empty-video'}
+                      ref={videoRef}
+                      className="video-annotate-player h-full w-full max-h-[360px] bg-white"
+                      data-controls-visible={showVideoControls ? 'true' : 'false'}
+                      tabIndex={isPictureInPicture ? -1 : 0}
+                      controls={false}
+                      playsInline
+                      preload="metadata"
+                      poster={WHITE_VIDEO_POSTER}
+                      onContextMenu={(event) => event.preventDefault()}
+                      onClick={handleTogglePlayback}
+                      onPlay={handleVideoPlay}
+                      onPause={handleVideoPause}
+                      onEnded={handleVideoPause}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                    >
+                      {videoSource?.url ? (
+                        <source
+                          src={videoSource.url}
+                          type={resolvedVideoMimeType}
+                        />
+                      ) : null}
+                      Your browser does not support the video tag.
+                    </video>
+                    {!isLoadingTranscript && !videoSource?.url && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm shadow-slate-200/70">
+                          {videoSourceError ?? 'No video uploaded for this transcript.'}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleVideoPlayClick}
+                      aria-label="Play video"
+                      className={`absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/30 text-white shadow-[0_10px_30px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
+                        shouldShowPlayOverlay
+                          ? ''
+                          : 'pointer-events-none opacity-0'
+                      }`}
+                      aria-hidden={!shouldShowPlayOverlay}
+                      tabIndex={shouldShowPlayOverlay ? 0 : -1}
+                    >
+                      <svg
+                        width="22"
+                        height="26"
+                        viewBox="0 0 22 26"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M5 4.2c0-1.18 1.3-1.9 2.34-1.2l11.2 7a1.5 1.5 0 0 1 0 2.6l-11.2 7c-1.04.66-2.34-.06-2.34-1.26V4.2Z"
+                        />
+                      </svg>
+                    </button>
+                    {videoSource?.url && (
+                      <div
+                        className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-4 pb-3 pt-8 text-white transition duration-200 ${
+                          showVideoControls ? 'opacity-100' : 'pointer-events-none opacity-0'
+                        }`}
+                      >
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/80 via-slate-950/40 to-transparent" />
+                        <input
+                          type="range"
+                          min={0}
+                          max={segmentDuration ?? 0}
+                          step={0.1}
+                          value={segmentPlaybackValue}
+                          onChange={(event) =>
+                            handleSegmentSeek(Number(event.target.value))
+                          }
+                          disabled={!isSegmentSeekEnabled}
+                          className="relative z-10 h-1 w-full cursor-pointer accent-white/90"
+                          aria-label="Seek within segment"
+                        />
+                        <div className="relative z-10 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleTogglePlayback}
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                              aria-label={isVideoPlaying ? 'Pause video' : 'Play video'}
+                            >
+                              {isVideoPlaying ? (
+                                <Pause className="h-4 w-4" />
+                              ) : (
+                                <Play className="h-4 w-4" />
+                              )}
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleToggleMute}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                                aria-label={isVideoMuted ? 'Unmute video' : 'Mute video'}
+                              >
+                                {isVideoMuted || videoVolume === 0 ? (
+                                  <VolumeX className="h-4 w-4" />
+                                ) : (
+                                  <Volume2 className="h-4 w-4" />
+                                )}
+                              </button>
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={videoVolume}
+                                onChange={(event) =>
+                                  handleVolumeChange(Number(event.target.value))
+                                }
+                                className="h-1 w-20 cursor-pointer accent-white/90"
+                                aria-label="Adjust volume"
+                              />
+                            </div>
+                            <span className="text-xs font-mono text-white/80">
+                              {formatTimestamp(segmentPlaybackValue)} /{' '}
+                              {formatTimestamp(segmentDuration)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="relative" ref={timelineSettingsRef}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setTimelineSettingsOpen((open) => !open)
+                                }
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                                aria-label="Timeline highlight settings"
+                                aria-expanded={timelineSettingsOpen}
+                                aria-controls="timeline-highlight-panel"
+                              >
+                                <Settings className="h-4 w-4" />
+                              </button>
+                              {timelineSettingsOpen && (
+                                <div
+                                  id="timeline-highlight-panel"
+                                  className="absolute bottom-full right-0 z-30 mb-3 w-56 rounded-2xl border border-slate-200 bg-white/80 p-3 text-slate-700 shadow-xl shadow-slate-900/10 backdrop-blur-md"
+                                >
+                                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                    Timeline highlight
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-slate-500">
+                                    Show where a note tag appears across the
+                                    video.
+                                  </p>
+                                  <div className="mt-2 space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTimelineNoteSelect(null)}
+                                      className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
+                                        timelineNoteFilter === null
+                                          ? 'border border-slate-200 bg-slate-50 text-slate-900 shadow-sm'
+                                          : 'text-slate-600 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <span>Hide highlights</span>
+                                      {timelineNoteFilter === null && (
+                                        <Check className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                    {noteBadges.map((note) => {
+                                      const isActive =
+                                        timelineNoteFilter === note.id
+                                      return (
+                                        <button
+                                          key={note.id}
+                                          type="button"
+                                          onClick={() =>
+                                            handleTimelineNoteSelect(note.id)
+                                          }
+                                          className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
+                                            isActive
+                                              ? 'border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                              : 'text-slate-600 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          <span className="text-left">
+                                            Show "{note.label}" on timeline
+                                          </span>
+                                          {isActive && (
+                                            <Check className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                hasMultipleSegments && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 text-sm font-semibold text-slate-700">
+                    <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
+                      {activeSegmentLabel}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {hasPreviousSegment && (
+                        <button
+                          type="button"
+                          onClick={() => handleSegmentNavigate(-1)}
+                          aria-label="Previous section"
+                          className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                      )}
+                      {hasNextSegment && (
+                        <button
+                          type="button"
+                          onClick={() => handleSegmentNavigate(1)}
+                          aria-label="Next section"
+                          className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
               <div
                 ref={transcriptScrollRef}
                 className={`stealth-scrollbar relative flex-1 min-w-0 overflow-auto rounded-2xl border border-slate-100 bg-white/70 p-2 ${
@@ -3053,7 +3110,7 @@ function AnnotationPageContent() {
                   >
                     {transcriptError}
                   </div>
-                ) : activeSegmentRows.length === 0 ? (
+                ) : isTranscriptEmpty ? (
                   <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600">
                     No transcript lines available.
                   </div>
@@ -3067,10 +3124,10 @@ function AnnotationPageContent() {
                       {visibleColumns.utterance && <col />}
                       {visibleColumns.notes && <col style={{ width: noteColumnWidth }} />}
                     </colgroup>
-                    <thead className="rounded-2xl bg-white">
+                    <thead className={tableHeadClass}>
                       <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
                         <th
-                          className="bg-white px-3 py-2 align-middle"
+                          className={lineHeaderClass}
                           style={{
                             width: lineColumnWidth,
                             minWidth: lineColumnWidth,
@@ -3080,23 +3137,29 @@ function AnnotationPageContent() {
                         </th>
                         {visibleColumns.speaker && (
                           <th
-                            className="bg-white px-3 py-2 align-middle"
-                            style={{
-                              width: speakerColumnWidth,
-                              minWidth: speakerColumnWidth,
-                            }}
+                            className={speakerHeaderClass}
+                            style={
+                              hasVideo
+                                ? {
+                                    width: speakerColumnWidth,
+                                    minWidth: speakerColumnWidth,
+                                  }
+                                : {
+                                    left: lineColumnWidth,
+                                    width: speakerColumnWidth,
+                                    minWidth: speakerColumnWidth,
+                                  }
+                            }
                           >
                             Speaker
                           </th>
                         )}
                         {visibleColumns.utterance && (
-                          <th className="bg-white px-3 py-2 align-middle">
-                            Utterance
-                          </th>
+                          <th className={standardHeaderClass}>Utterance</th>
                         )}
                         {visibleColumns.notes && (
                           <th
-                            className="bg-white px-3 py-2 align-middle"
+                            className={standardHeaderClass}
                             style={{
                               width: noteColumnWidth,
                               minWidth: noteColumnWidth,
@@ -3150,7 +3213,9 @@ function AnnotationPageContent() {
                             key={row.id}
                             data-row-id={row.id}
                             onClick={() => handleRowSelection(row.id)}
-                            onDoubleClick={() => handleRowDoubleClick(row.id)}
+                            onDoubleClick={
+                              hasVideo ? () => handleRowDoubleClick(row.id) : undefined
+                            }
                             onMouseDown={(event) => handleRowMouseDown(row.id, event)}
                             onMouseEnter={(event) => handleRowPointerDrag(row.id, event)}
                             onMouseMove={(event) => handleRowPointerDrag(row.id, event)}
@@ -3221,10 +3286,22 @@ function AnnotationPageContent() {
                                   minWidth: noteColumnWidth,
                                 }}
                               >
-                                {(activeRowNotes.length > 0 ||
-                                  activeRowStaticNotes.length > 0) && (
+                                {(hasVideo
+                                  ? activeRowNotes.length > 0 ||
+                                    activeRowStaticNotes.length > 0
+                                  : activeRowNotes.length > 0) && (
                                   <div className="flex flex-wrap gap-2">
                                     {activeRowNotes.map((note) => {
+                                      if (!hasVideo) {
+                                        return (
+                                          <span
+                                            key={note.id}
+                                            className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100"
+                                          >
+                                            {note.label}
+                                          </span>
+                                        )
+                                      }
                                       const isTimelineNoteActive =
                                         timelineNoteFilter === note.id
                                       return (
@@ -3256,34 +3333,37 @@ function AnnotationPageContent() {
                                         </button>
                                       )
                                     })}
-                                    {activeRowStaticNotes.map((note) => {
-                                      const isNoteExpanded =
-                                        expandedStaticNotes[note.id] ?? false
-                                      return (
-                                        <button
-                                          key={note.id}
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation()
-                                            handleStaticNoteBadgeToggle(note.id)
-                                          }}
-                                          onMouseDown={(event) => event.stopPropagation()}
-                                          onMouseUp={(event) => event.stopPropagation()}
-                                          onDoubleClick={(event) =>
-                                            event.stopPropagation()
-                                          }
-                                          aria-expanded={isNoteExpanded}
-                                          title={
-                                            isNoteExpanded
-                                              ? `Collapse "${note.title}" details`
-                                              : `Expand "${note.title}" details`
-                                          }
-                                          className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 shadow-sm shadow-indigo-100 transition"
-                                        >
-                                          {note.title}
-                                        </button>
-                                      )
-                                    })}
+                                    {hasVideo &&
+                                      activeRowStaticNotes.map((note) => {
+                                        const isNoteExpanded =
+                                          expandedStaticNotes[note.id] ?? false
+                                        return (
+                                          <button
+                                            key={note.id}
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleStaticNoteBadgeToggle(note.id)
+                                            }}
+                                            onMouseDown={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            onMouseUp={(event) => event.stopPropagation()}
+                                            onDoubleClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            aria-expanded={isNoteExpanded}
+                                            title={
+                                              isNoteExpanded
+                                                ? `Collapse "${note.title}" details`
+                                                : `Expand "${note.title}" details`
+                                            }
+                                            className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 shadow-sm shadow-indigo-100 transition"
+                                          >
+                                            {note.title}
+                                          </button>
+                                        )
+                                      })}
                                   </div>
                                 )}
                               </td>
@@ -3298,7 +3378,7 @@ function AnnotationPageContent() {
               {filteredRows.length === 0 &&
                 !isLoadingTranscript &&
                 !transcriptError &&
-                activeSegmentRows.length > 0 && (
+                hasRowsForFilters && (
                 <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
                   No lines match your current filters. Try adjusting the search or speaker/flag
                   filters.

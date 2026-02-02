@@ -39,6 +39,7 @@ model User {
   annotations   Annotations[]
   notes         Notes[]
   flagAssignments FlagAssignments[]
+  llmNotePrompts LLMNotePrompts[]
 
   @@unique([workspace_id, username])
 }
@@ -67,6 +68,7 @@ model Transcripts {
   annotations                 Annotations[]
   segments                    TranscriptSegments[]
   notes                       Notes[]
+  llmNotePrompts             LLMNotePrompts[]
 
   @@map("Transcripts")
 }
@@ -80,6 +82,7 @@ model Notes {
   q1            String      @db.Text
   q2            String      @db.Text
   q3            String      @db.Text
+  source        NoteSource  @default(user)
   createdAt     DateTime    @default(now())
   user          User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
   transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
@@ -176,8 +179,34 @@ model TranscriptSegments {
   @@map("TranscriptSegments")
 }
 
+model LLMNotePrompts {
+  id                     String   @id @default(uuid()) @db.Uuid
+  transcript_id          String   @db.Uuid
+  created_by             String   @db.Uuid
+
+  note_creation_prompt   String   @db.Text
+  note_assignment_prompt String   @db.Text
+
+  annotate_all_lines     Boolean  @default(true)
+
+  range_start_line       Int?
+  range_end_line         Int?
+
+  createdAt              DateTime @default(now())
+
+  transcript Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  @@map("LLMNotePrompts")
+}
+
 enum Role {
   user
   annotator
   admin
+}
+
+enum NoteSource {
+  user
+  llm
 }
