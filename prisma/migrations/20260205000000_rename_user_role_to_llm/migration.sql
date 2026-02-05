@@ -1,0 +1,4 @@
+ALTER TYPE "Role" RENAME VALUE 'user' TO 'llm';
+
+ALTER TABLE "User"
+ALTER COLUMN "role" SET DEFAULT 'llm';

@@ -179,7 +179,10 @@ const normalizeRole = (incomingRole: string): Role => {
   if (incomingRole === 'annotator') {
     return 'annotator' as Role
   }
-  return 'user'
+  if (incomingRole === 'llm') {
+    return 'llm' as Role
+  }
+  return 'llm'
 }
 
 const normalizeTranscriptIds = (candidate: unknown): string[] => {

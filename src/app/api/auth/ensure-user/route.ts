@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 
 const DEFAULT_ROLE = 'admin' as const
+const SYSTEM_USERNAME = 'llm-system'
+const SYSTEM_NAME = 'LLM System'
 
 const buildDisplayName = (input: {
   firstName?: string | null
@@ -102,6 +104,15 @@ export async function POST(request: Request) {
           password,
           role: DEFAULT_ROLE,
           auth_user_id: userId,
+          workspace_id: workspace.id,
+        },
+      })
+
+      await tx.user.create({
+        data: {
+          name: SYSTEM_NAME,
+          username: SYSTEM_USERNAME,
+          password: crypto.randomBytes(24).toString('hex'),
           workspace_id: workspace.id,
         },
       })

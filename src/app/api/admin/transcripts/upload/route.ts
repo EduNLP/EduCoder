@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { prisma } from '@/lib/prisma'
 import { bucketName, uploadToBucket, type UploadResult } from '../storage'
@@ -23,6 +26,18 @@ const toSeconds = (value: number | null) =>
   typeof value === 'number' && Number.isFinite(value)
     ? Math.round(value * 100) / 100
     : null
+
+const noteCreationPromptPath = path.join(
+  process.cwd(),
+  'prompts',
+  'note_creation_prompt_part_1_customizable.md',
+)
+
+const noteAssignmentPromptPath = path.join(
+  process.cwd(),
+  'prompts',
+  'note_assignment_prompt_part_1_customizable.md',
+)
 
 export async function POST(request: Request) {
   try {
@@ -105,6 +120,11 @@ export async function POST(request: Request) {
     }
     const associatedUpload = uploads.find((upload) => upload.field === 'associatedFile')
 
+    const [noteCreationPrompt, noteAssignmentPrompt] = await Promise.all([
+      readFile(noteCreationPromptPath, 'utf8'),
+      readFile(noteAssignmentPromptPath, 'utf8'),
+    ])
+
     const transcriptRecord = await prisma.$transaction(async (tx) => {
       const transcript = await tx.transcripts.create({
         data: {
@@ -120,6 +140,23 @@ export async function POST(request: Request) {
           llm_annotation_gcs_path: associatedUpload?.gcsPath ?? null,
         },
       })
+
+      await tx.$executeRaw`
+        INSERT INTO "LLMNotePrompts" (
+          "id",
+          "transcript_id",
+          "created_by",
+          "note_creation_prompt",
+          "note_assignment_prompt"
+        )
+        VALUES (
+          ${randomUUID()},
+          ${transcript.id},
+          ${uploader.id},
+          ${noteCreationPrompt},
+          ${noteAssignmentPrompt}
+        )
+      `
 
       const segmentValuesInOrder: string[] = []
       const segmentStats = new Map<

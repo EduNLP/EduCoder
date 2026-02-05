@@ -1,14 +1,9 @@
 'use client'
 
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, Upload, FileText, Download, Trash2, BookOpen } from 'lucide-react'
 import UploadTranscriptModal from '@/components/admin/UploadTranscriptModal'
 import UploadInstructionMaterialsModal from '@/components/admin/UploadInstructionMaterialsModal'
-import {
-  SPREADSHEET_ACCEPT,
-  SPREADSHEET_FILE_ERROR_MESSAGE,
-  validateTranscriptSpreadsheet,
-} from '@/utils/transcriptFileValidation'
 
 type TranscriptRecord = {
   id: string
@@ -103,8 +98,6 @@ export default function TranscriptsPage() {
   const [transcripts, setTranscripts] = useState<TranscriptRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [uploadingTranscriptId, setUploadingTranscriptId] = useState<string | null>(null)
-  const [uploadError, setUploadError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [downloadingTranscriptId, setDownloadingTranscriptId] = useState<string | null>(null)
   const [downloadError, setDownloadError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [deletingTranscriptId, setDeletingTranscriptId] = useState<string | null>(null)
@@ -239,73 +232,6 @@ export default function TranscriptsPage() {
     }
   }
 
-  const handleAssociatedFileUpload = async (transcriptId: string, event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target
-    const file = input.files?.[0]
-    if (!file) {
-      return
-    }
-
-    setUploadError(null)
-
-    const validation = await validateTranscriptSpreadsheet(file)
-    if (!validation.isValid) {
-      setUploadError({
-        transcriptId,
-        message: validation.error ?? SPREADSHEET_FILE_ERROR_MESSAGE,
-      })
-      input.value = ''
-      return
-    }
-
-    setUploadingTranscriptId(transcriptId)
-
-    try {
-      const formData = new FormData()
-      formData.append('transcriptId', transcriptId)
-      formData.append('associatedFile', file)
-
-      const response = await fetch(`/api/admin/transcripts/${transcriptId}/associated`, {
-        method: 'POST',
-        body: formData,
-      })
-      const payload = await response.json().catch(() => ({}))
-
-      if (!response.ok || payload?.success === false) {
-        const message =
-          typeof payload?.error === 'string'
-            ? payload.error
-            : 'Failed to upload associated file.'
-        throw new Error(message)
-      }
-
-      const annotationFileName =
-        typeof payload?.annotation_file_name === 'string' && payload.annotation_file_name
-          ? payload.annotation_file_name
-          : file.name
-
-      setTranscripts((previous) =>
-        previous.map((transcript) =>
-          transcript.id === transcriptId
-            ? {
-                ...transcript,
-                annotation_file_name: annotationFileName,
-                llm_annotation: true,
-              }
-            : transcript,
-        ),
-      )
-    } catch (error) {
-      console.error('Failed to upload associated file', error)
-      const message =
-        error instanceof Error ? error.message : 'Failed to upload associated file.'
-      setUploadError({ transcriptId, message })
-    } finally {
-      setUploadingTranscriptId(null)
-      input.value = ''
-    }
-  }
-
   const handleDownloadTranscript = async (transcriptId: string) => {
     setDownloadError(null)
     setDownloadingTranscriptId(transcriptId)
@@ -405,9 +331,6 @@ export default function TranscriptsPage() {
       {/* Transcripts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredTranscripts.map((transcript) => {
-          const isUploadingAssociated = uploadingTranscriptId === transcript.id
-          const associatedError =
-            uploadError?.transcriptId === transcript.id ? uploadError.message : null
           const isDeleting = deletingTranscriptId === transcript.id
 
           return (
@@ -427,7 +350,7 @@ export default function TranscriptsPage() {
               </div>
 
               {/* Files */}
-              <div className="mb-4 space-y-3">
+              <div className="mb-4">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex items-center gap-2">
@@ -438,53 +361,6 @@ export default function TranscriptsPage() {
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Transcript File</p>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {transcript.annotation_file_name ? (
-                    <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-primary-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          {transcript.annotation_file_name}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Annotation File</p>
-                    </div>
-                  ) : (
-                    <div className="flex-1 relative">
-                      <input
-                        type="file"
-                        id={`associated-file-${transcript.id}`}
-                        className="hidden"
-                        onChange={(e) => handleAssociatedFileUpload(transcript.id, e)}
-                        accept={SPREADSHEET_ACCEPT}
-                        disabled={isUploadingAssociated}
-                      />
-                      <label
-                        htmlFor={`associated-file-${transcript.id}`}
-                        className={`block border-2 border-dashed border-gray-300 rounded-lg p-3 bg-gray-50 hover:bg-gray-100 hover:border-primary-400 cursor-pointer transition-all ${
-                          isUploadingAssociated ? 'opacity-70 pointer-events-none' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Upload className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-500">
-                            {isUploadingAssociated
-                              ? 'Uploading associated file...'
-                              : 'Click to upload associated file'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">CSV, XLS, XLSX only</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Required columns: Line number (or #), Speaker, and Dialogue (or Utterance).
-                        </p>
-                      </label>
-                      {associatedError && (
-                        <p className="text-xs text-red-600 mt-2">{associatedError}</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 

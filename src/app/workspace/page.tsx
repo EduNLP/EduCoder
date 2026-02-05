@@ -253,7 +253,7 @@ export default function DashboardPage() {
   }
 
   const handleTileClick = (tile: WorkspaceTranscript) => {
-    router.push(`/annotate-video?transcript=${tile.transcriptId}`)
+    router.push(`/annotate?transcript=${tile.transcriptId}`)
   }
 
   const handleMenuLinkAction = (link: { id: string }) => {

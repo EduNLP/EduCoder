@@ -13,9 +13,11 @@ datasource db {
 }
 
 model Workspace {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  createdAt   DateTime @default(now())
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  createdAt            DateTime @default(now())
+  llm_annotation_limit Int      @default(3)
+  llm_annotation_used  Int      @default(0)
 
   users       User[]
   transcripts Transcripts[]
@@ -31,7 +33,7 @@ model User {
   username      String
   password      String
   auth_user_id  String?  @unique
-  role          Role     @default(user)
+  role          Role     @default(llm)
   createdAt     DateTime @default(now())
   lastLogin     DateTime?
   workspace     Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
@@ -129,6 +131,8 @@ model Annotations {
   created_for   String            @db.Uuid
   hide                 Boolean?          @default(false)
   annotation_completed Boolean           @default(false)
+  llm_annotation_visibility_admin LLMAnnotationVisibilityAdmin @default(hidden)
+  llm_annotation_visibility_user  Boolean @default(true)
   gcs_path             String            @db.Text
   upload_time          DateTime          @default(now())
   last_updated         DateTime          @updatedAt
@@ -201,7 +205,7 @@ model LLMNotePrompts {
 }
 
 enum Role {
-  user
+  llm
   annotator
   admin
 }
@@ -209,4 +213,10 @@ enum Role {
 enum NoteSource {
   user
   llm
+}
+
+enum LLMAnnotationVisibilityAdmin {
+  hidden
+  visible_after_completion
+  always_visible
 }

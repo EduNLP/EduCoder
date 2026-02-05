@@ -45,6 +45,26 @@ type TranscriptsResponse = {
   error?: string
 }
 
+type LlmNotePromptsPayload = {
+  note_creation_prompt: string
+  note_assignment_prompt: string
+  annotate_all_lines: boolean
+  range_start_line: number | null
+  range_end_line: number | null
+}
+
+type LlmNotePromptsResponse = {
+  success: boolean
+  settings?: LlmNotePromptsPayload | null
+  error?: string
+}
+
+type GenerateLlmNotesResponse = {
+  success: boolean
+  notesCreated?: number
+  error?: string
+}
+
 type LlmAnnotationSettings = {
   scope: 'all' | 'range'
   startLine: string
@@ -66,6 +86,24 @@ const DEFAULT_LLM_SETTINGS: LlmAnnotationSettings = {
   endLine: '',
   noteCreationPrompt: '',
   noteAssignmentPrompt: '',
+}
+
+const normalizeLlmSettings = (
+  payload: LlmNotePromptsPayload | null | undefined,
+): LlmAnnotationSettings => {
+  if (!payload) {
+    return DEFAULT_LLM_SETTINGS
+  }
+
+  return {
+    scope: payload.annotate_all_lines ? 'all' : 'range',
+    startLine:
+      typeof payload.range_start_line === 'number' ? String(payload.range_start_line) : '',
+    endLine:
+      typeof payload.range_end_line === 'number' ? String(payload.range_end_line) : '',
+    noteCreationPrompt: payload.note_creation_prompt ?? '',
+    noteAssignmentPrompt: payload.note_assignment_prompt ?? '',
+  }
 }
 
 const parseFileNameFromContentDisposition = (header: string | null) => {
@@ -99,6 +137,7 @@ export default function LlmAnnotationsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [generatingTranscriptIds, setGeneratingTranscriptIds] = useState<Set<string>>(() => new Set())
   const [generateError, setGenerateError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [generatedTranscriptIds, setGeneratedTranscriptIds] = useState<Set<string>>(() => new Set())
   const [downloadingTranscriptId, setDownloadingTranscriptId] = useState<string | null>(null)
@@ -112,6 +151,9 @@ export default function LlmAnnotationsPage() {
   const [llmSettingsByTranscriptId, setLlmSettingsByTranscriptId] = useState<
     Record<string, LlmAnnotationSettings>
   >({})
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false)
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false)
+  const [settingsErrorMessage, setSettingsErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let isCancelled = false
@@ -170,6 +212,65 @@ export default function LlmAnnotationsPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const transcriptId = settingsTranscript?.id
+    if (!transcriptId) {
+      return
+    }
+
+    let isCancelled = false
+    const controller = new AbortController()
+
+    const fetchSettings = async () => {
+      setIsSettingsLoading(true)
+      setSettingsErrorMessage(null)
+
+      try {
+        const response = await fetch(
+          `/api/admin/transcripts/${transcriptId}/llm-note-prompts`,
+          { signal: controller.signal },
+        )
+        const payload: LlmNotePromptsResponse | null = await response.json().catch(() => null)
+
+        if (!response.ok || !payload?.success) {
+          const message = payload?.error ?? 'Failed to load LLM note prompt settings.'
+          throw new Error(message)
+        }
+
+        if (isCancelled) {
+          return
+        }
+
+        setLlmSettingsByTranscriptId((previous) => ({
+          ...previous,
+          [transcriptId]: normalizeLlmSettings(payload.settings ?? null),
+        }))
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+
+        console.error('Failed to fetch LLM prompt settings', error)
+        if (!isCancelled) {
+          setSettingsErrorMessage(
+            error instanceof Error ? error.message : 'Failed to load LLM note prompt settings.',
+          )
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsSettingsLoading(false)
+        }
+      }
+    }
+
+    fetchSettings()
+
+    return () => {
+      isCancelled = true
+      controller.abort()
+    }
+  }, [settingsTranscript?.id])
+
   const filteredTranscripts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return transcripts
@@ -180,13 +281,48 @@ export default function LlmAnnotationsPage() {
     })
   }, [searchQuery, transcripts])
 
-  const handleGenerate = (transcriptId: string) => {
+  const handleGenerate = async (transcriptId: string) => {
+    if (generatingTranscriptIds.has(transcriptId)) {
+      return
+    }
+
     setGenerateError(null)
-    setGeneratedTranscriptIds((current) => {
+
+    setGeneratingTranscriptIds((current) => {
       const next = new Set(current)
       next.add(transcriptId)
       return next
     })
+
+    try {
+      const response = await fetch(`/api/admin/transcripts/${transcriptId}/llm-notes/generate`, {
+        method: 'POST',
+      })
+      const payload: GenerateLlmNotesResponse | null = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Failed to generate LLM notes.'
+        throw new Error(message)
+      }
+
+      setGeneratedTranscriptIds((current) => {
+        const next = new Set(current)
+        next.add(transcriptId)
+        return next
+      })
+    } catch (error) {
+      console.error('Failed to generate LLM notes', error)
+      setGenerateError({
+        transcriptId,
+        message: error instanceof Error ? error.message : 'Failed to generate LLM notes.',
+      })
+    } finally {
+      setGeneratingTranscriptIds((current) => {
+        const next = new Set(current)
+        next.delete(transcriptId)
+        return next
+      })
+    }
   }
 
   const handleDownload = async (transcriptId: string) => {
@@ -318,6 +454,67 @@ export default function LlmAnnotationsPage() {
     })
   }
 
+  const openSettingsModal = (transcript: TranscriptRecord) => {
+    setSettingsErrorMessage(null)
+    setSettingsTranscript(transcript)
+  }
+
+  const closeSettingsModal = () => {
+    if (isSettingsSaving) {
+      return
+    }
+
+    setSettingsTranscript(null)
+    setSettingsErrorMessage(null)
+  }
+
+  const handleSaveSettings = async () => {
+    if (!settingsTranscript) {
+      return
+    }
+
+    const transcriptId = settingsTranscript.id
+    const currentSettings = llmSettingsByTranscriptId[transcriptId] ?? DEFAULT_LLM_SETTINGS
+
+    setIsSettingsSaving(true)
+    setSettingsErrorMessage(null)
+
+    try {
+      const response = await fetch(`/api/admin/transcripts/${transcriptId}/llm-note-prompts`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scope: currentSettings.scope,
+          startLine: currentSettings.scope === 'range' ? currentSettings.startLine : null,
+          endLine: currentSettings.scope === 'range' ? currentSettings.endLine : null,
+          noteCreationPrompt: currentSettings.noteCreationPrompt,
+          noteAssignmentPrompt: currentSettings.noteAssignmentPrompt,
+        }),
+      })
+      const payload: LlmNotePromptsResponse | null = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Failed to save LLM note prompt settings.'
+        throw new Error(message)
+      }
+
+      setLlmSettingsByTranscriptId((previous) => ({
+        ...previous,
+        [transcriptId]: normalizeLlmSettings(payload.settings ?? null),
+      }))
+      setSettingsTranscript(null)
+    } catch (error) {
+      console.error('Failed to save LLM prompt settings', error)
+      setSettingsErrorMessage(
+        error instanceof Error ? error.message : 'Failed to save LLM note prompt settings.',
+      )
+    } finally {
+      setIsSettingsSaving(false)
+    }
+  }
+
   const openVisibilityModal = (transcript: TranscriptRecord) => {
     setVisibilityTranscript(transcript)
     setShowAnnotatorOverrides(false)
@@ -327,6 +524,9 @@ export default function LlmAnnotationsPage() {
     setVisibilityTranscript(null)
     setShowAnnotatorOverrides(false)
   }
+
+  const activeSettings =
+    settingsTranscript ? llmSettingsByTranscriptId[settingsTranscript.id] ?? DEFAULT_LLM_SETTINGS : null
 
   return (
     <div className="p-8">
@@ -374,7 +574,9 @@ export default function LlmAnnotationsPage() {
           const hasAttachment = Boolean(
             transcript.llm_annotation_gcs_path || transcript.annotation_file_name || transcript.llm_annotation,
           )
-          const isGenerated = hasAttachment || generatedTranscriptIds.has(transcript.id)
+          const hasGeneratedNotes = generatedTranscriptIds.has(transcript.id)
+          const isGenerating = generatingTranscriptIds.has(transcript.id)
+          const isGenerated = hasAttachment || hasGeneratedNotes
           const isDownloading = downloadingTranscriptId === transcript.id
           const isAttaching = attachingTranscriptId === transcript.id
           const attachErrorMessage =
@@ -410,7 +612,7 @@ export default function LlmAnnotationsPage() {
                     className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
                       hasAttachment
                         ? 'bg-green-100 text-green-700'
-                        : isGenerated
+                        : isGenerating || hasGeneratedNotes
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-yellow-100 text-yellow-700'
                     }`}
@@ -418,8 +620,10 @@ export default function LlmAnnotationsPage() {
                     <Sparkles className="w-4 h-4" />
                     {hasAttachment
                       ? 'LLM file available'
-                      : isGenerated
+                      : isGenerating
                         ? 'Generation in progress'
+                        : hasGeneratedNotes
+                          ? 'LLM notes generated'
                         : 'LLM file not generated'}
                   </span>
                 </div>
@@ -442,7 +646,7 @@ export default function LlmAnnotationsPage() {
               <div className="flex flex-col gap-2 pt-4 border-t border-gray-200">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => setSettingsTranscript(transcript)}
+                    onClick={() => openSettingsModal(transcript)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                   >
                     <SettingsIcon className="w-4 h-4" />
@@ -450,11 +654,16 @@ export default function LlmAnnotationsPage() {
                   </button>
 
                   <button
-                    onClick={() => handleGenerate(transcript.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    onClick={() => void handleGenerate(transcript.id)}
+                    className={`flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors ${
+                      isGenerating ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
+                    disabled={isGenerating}
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span className="text-sm font-medium">Generate LLM Annotations</span>
+                    <span className="text-sm font-medium">
+                      {isGenerating ? 'Generating...' : 'Generate LLM Annotations'}
+                    </span>
                   </button>
 
                 </div>
@@ -714,7 +923,7 @@ export default function LlmAnnotationsPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div
             className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-            onClick={() => setSettingsTranscript(null)}
+            onClick={closeSettingsModal}
           />
 
           <div className="flex min-h-full items-center justify-center p-4">
@@ -727,7 +936,7 @@ export default function LlmAnnotationsPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setSettingsTranscript(null)}
+                  onClick={closeSettingsModal}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -735,6 +944,17 @@ export default function LlmAnnotationsPage() {
               </div>
 
               <div className="p-6 space-y-4">
+                {isSettingsLoading && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    Loading settings...
+                  </div>
+                )}
+                {settingsErrorMessage && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {settingsErrorMessage}
+                  </div>
+                )}
+
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <p className="text-sm font-semibold text-gray-900">Transcript line selection</p>
                   <p className="text-xs text-gray-600 mt-1">
@@ -746,11 +966,9 @@ export default function LlmAnnotationsPage() {
                       <input
                         type="radio"
                         name="llm-line-scope"
-                        checked={
-                          (llmSettingsByTranscriptId[settingsTranscript.id]?.scope ??
-                            DEFAULT_LLM_SETTINGS.scope) === 'all'
-                        }
+                        checked={(activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'all'}
                         onChange={() => updateLlmSettings(settingsTranscript.id, { scope: 'all' })}
+                        disabled={isSettingsLoading || isSettingsSaving}
                         className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                       />
                       Annotate all lines
@@ -759,11 +977,9 @@ export default function LlmAnnotationsPage() {
                       <input
                         type="radio"
                         name="llm-line-scope"
-                        checked={
-                          (llmSettingsByTranscriptId[settingsTranscript.id]?.scope ??
-                            DEFAULT_LLM_SETTINGS.scope) === 'range'
-                        }
+                        checked={(activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'range'}
                         onChange={() => updateLlmSettings(settingsTranscript.id, { scope: 'range' })}
+                        disabled={isSettingsLoading || isSettingsSaving}
                         className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                       />
                       Annotate a line range
@@ -776,13 +992,14 @@ export default function LlmAnnotationsPage() {
                           type="number"
                           min={1}
                           inputMode="numeric"
-                          value={llmSettingsByTranscriptId[settingsTranscript.id]?.startLine ?? ''}
+                          value={activeSettings?.startLine ?? ''}
                           onChange={(event) =>
                             updateLlmSettings(settingsTranscript.id, { startLine: event.target.value })
                           }
                           disabled={
-                            (llmSettingsByTranscriptId[settingsTranscript.id]?.scope ??
-                              DEFAULT_LLM_SETTINGS.scope) !== 'range'
+                            (activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) !== 'range' ||
+                            isSettingsLoading ||
+                            isSettingsSaving
                           }
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                           placeholder="e.g. 1"
@@ -794,13 +1011,14 @@ export default function LlmAnnotationsPage() {
                           type="number"
                           min={1}
                           inputMode="numeric"
-                          value={llmSettingsByTranscriptId[settingsTranscript.id]?.endLine ?? ''}
+                          value={activeSettings?.endLine ?? ''}
                           onChange={(event) =>
                             updateLlmSettings(settingsTranscript.id, { endLine: event.target.value })
                           }
                           disabled={
-                            (llmSettingsByTranscriptId[settingsTranscript.id]?.scope ??
-                              DEFAULT_LLM_SETTINGS.scope) !== 'range'
+                            (activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) !== 'range' ||
+                            isSettingsLoading ||
+                            isSettingsSaving
                           }
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                           placeholder="e.g. 120"
@@ -815,15 +1033,14 @@ export default function LlmAnnotationsPage() {
                     <label className="text-sm font-semibold text-gray-900">
                       Note Creation
                       <textarea
-                        value={
-                          llmSettingsByTranscriptId[settingsTranscript.id]?.noteCreationPrompt ?? ''
-                        }
+                        value={activeSettings?.noteCreationPrompt ?? ''}
                         onChange={(event) =>
                           updateLlmSettings(settingsTranscript.id, {
                             noteCreationPrompt: event.target.value,
                           })
                         }
                         rows={4}
+                        disabled={isSettingsLoading || isSettingsSaving}
                         placeholder="Describe how notes should be generated..."
                         className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       />
@@ -834,15 +1051,14 @@ export default function LlmAnnotationsPage() {
                     <label className="text-sm font-semibold text-gray-900">
                       Note Assignment
                       <textarea
-                        value={
-                          llmSettingsByTranscriptId[settingsTranscript.id]?.noteAssignmentPrompt ?? ''
-                        }
+                        value={activeSettings?.noteAssignmentPrompt ?? ''}
                         onChange={(event) =>
                           updateLlmSettings(settingsTranscript.id, {
                             noteAssignmentPrompt: event.target.value,
                           })
                         }
                         rows={4}
+                        disabled={isSettingsLoading || isSettingsSaving}
                         placeholder="Describe how each generated note should be assigned..."
                         className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       />
@@ -852,16 +1068,18 @@ export default function LlmAnnotationsPage() {
 
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                   <button
-                    onClick={() => setSettingsTranscript(null)}
+                    onClick={closeSettingsModal}
                     className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    disabled={isSettingsSaving}
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => setSettingsTranscript(null)}
+                    onClick={handleSaveSettings}
                     className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                    disabled={isSettingsLoading || isSettingsSaving}
                   >
-                    Save settings
+                    {isSettingsSaving ? 'Saving...' : 'Save settings'}
                   </button>
                 </div>
               </div>

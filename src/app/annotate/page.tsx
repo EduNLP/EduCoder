@@ -12,8 +12,16 @@ import {
   ListFilter,
   LogOut,
   BookmarkCheck,
+  Check,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
   Plus,
   Search,
+  Settings,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -32,6 +40,8 @@ type TranscriptRow = {
   line: string
   speaker: string
   utterance: string
+  inCue: number | null
+  outCue: number | null
   segmentId: string | null
   flagged: boolean
 }
@@ -40,6 +50,8 @@ type TranscriptSegment = {
   id: string
   title: string
   index: number
+  startTime: number | null
+  endTime: number | null
 }
 
 type AnnotationStatus = 'not_started' | 'in_progress' | 'completed'
@@ -63,6 +75,8 @@ type TranscriptResponse = {
     line: number
     speaker: string
     utterance: string
+    inCue?: number | string | null
+    outCue?: number | string | null
     segmentId?: string | null
     flagged?: boolean
   }>
@@ -70,6 +84,8 @@ type TranscriptResponse = {
     id: string
     title: string
     index: number
+    startTime?: number | string | null
+    endTime?: number | string | null
   }>
   error?: string
 }
@@ -82,6 +98,28 @@ type InstructionalMaterialResponse = {
     image_title: string
     description?: string | null
   }>
+  error?: string
+}
+
+type InstructionCard = {
+  id: string
+  title: string
+  imageUrl: string
+  description?: string | null
+}
+
+type VideoMeta = {
+  id: string
+  fileName: string
+  mimeType: string | null
+  gcsPath: string
+  uploadedAt: string
+  url: string
+}
+
+type VideoResponse = {
+  success: boolean
+  video?: VideoMeta | null
   error?: string
 }
 
@@ -137,13 +175,6 @@ type NoteSelectionSnapshot = {
   indeterminate: boolean
 }
 
-type InstructionCard = {
-  id: string
-  title: string
-  imageUrl: string
-  description?: string | null
-}
-
 type NoteBadge = {
   id: string
   label: string
@@ -182,24 +213,31 @@ const NOTE_BADGE_COLORS = [
   'border-emerald-200 bg-emerald-50 text-emerald-700',
 ]
 
+const NOTE_HIGHLIGHT_COLORS = [
+  'bg-sky-400',
+  'bg-amber-400',
+  'bg-rose-400',
+  'bg-emerald-400',
+]
+
 const NOTE_DETAILS_FIELD_CONFIG = [
   {
     id: 'studentEvidence',
-    questionKey: 'q1',
     label: 'What are the students saying or doing?',
-    placeholder: 'Capture student evidence from the transcript.',
+    placeholder: 'Add student evidence',
+    noteKey: 'q1',
   },
   {
     id: 'utteranceNote',
-    questionKey: 'q2',
     label: 'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
-    placeholder: 'Add your interpretation tied to the lesson purpose.',
+    placeholder: 'Add interpretation tied to the lesson purpose',
+    noteKey: 'q2',
   },
   {
     id: 'thinkingInsight',
-    questionKey: 'q3',
     label: 'What possible teacher responses would you do?',
-    placeholder: 'Note potential teacher responses or next moves.',
+    placeholder: 'Add possible teacher responses',
+    noteKey: 'q3',
   },
 ] as const
 
@@ -226,6 +264,32 @@ const STATIC_ASSIGN_NOTES = [
     q3: 'Evidence suggests readiness to generalize proportional relationships.',
   },
 ] as const
+
+const STATIC_ASSIGN_LINE_NUMBERS = new Set([1, 2, 4, 6, 8, 10, 12, 13, 14])
+
+const STATIC_ASSIGN_NOTE_LOOKUP = STATIC_ASSIGN_NOTES.reduce(
+  (acc, note) => {
+    acc[note.id] = note
+    return acc
+  },
+  {} as Record<string, (typeof STATIC_ASSIGN_NOTES)[number]>,
+)
+
+const createStaticNoteAssignments = (rows: TranscriptRow[]) => {
+  if (rows.length === 0) return {}
+  return rows.reduce((acc, row) => {
+    const lineNumber = Number(row.line)
+    if (!Number.isFinite(lineNumber) || !STATIC_ASSIGN_LINE_NUMBERS.has(lineNumber)) {
+      return acc
+    }
+    const randomIndex = Math.floor(Math.random() * STATIC_ASSIGN_NOTES.length)
+    const noteId = STATIC_ASSIGN_NOTES[randomIndex]?.id
+    if (noteId) {
+      acc[row.id] = [noteId]
+    }
+    return acc
+  }, {} as Record<string, string[]>)
+}
 
 const createNoteContentFields = (note?: {
   q1?: string
@@ -400,6 +464,31 @@ const fallbackSpeakerColor: SpeakerColor = {
   border: 'border-slate-100',
 }
 
+// Solid-white poster keeps the player blank before playback.
+const WHITE_VIDEO_POSTER =
+  'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect width=%2216%22 height=%229%22 fill=%22white%22/%3E%3C/svg%3E'
+
+const parseCueValue = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const formatTimestamp = (value: number | null) => {
+  if (value === null || !Number.isFinite(value)) return '--:--'
+  const totalSeconds = Math.max(0, Math.floor(value))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
 function AnnotationPageFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
@@ -423,11 +512,8 @@ function AnnotationPageContent() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
   const { isLoaded: userLoaded } = useUser()
   const [transcriptRows, setTranscriptRows] = useState<TranscriptRow[]>([])
+  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
   const [transcriptMeta, setTranscriptMeta] = useState<TranscriptMeta | null>(null)
-  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>(
-    [],
-  )
-  const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
   const [isLoadingTranscript, setIsLoadingTranscript] = useState(false)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [instructionCards, setInstructionCards] = useState<InstructionCard[]>([])
@@ -436,6 +522,8 @@ function AnnotationPageContent() {
   const [instructionCardsError, setInstructionCardsError] = useState<string | null>(
     null,
   )
+  const [videoSource, setVideoSource] = useState<VideoMeta | null>(null)
+  const [videoSourceError, setVideoSourceError] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [instructionCollapsed, setInstructionCollapsed] = useState(false)
@@ -458,6 +546,9 @@ function AnnotationPageContent() {
   const [notesError, setNotesError] = useState<string | null>(null)
   const [rowAssignedNotes, setRowAssignedNotes] = useState<
     Record<string, Record<string, boolean>>
+  >({})
+  const [staticNoteAssignmentsByRow, setStaticNoteAssignmentsByRow] = useState<
+    Record<string, string[]>
   >({})
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
   const [expandedStaticNotes, setExpandedStaticNotes] = useState<
@@ -489,14 +580,34 @@ function AnnotationPageContent() {
     src: string
     title: string
   } | null>(null)
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
+  const [hasPlayedOnce, setHasPlayedOnce] = useState(false)
+  const [showVideoControls, setShowVideoControls] = useState(false)
+  const [showVideoPlayOverlay, setShowVideoPlayOverlay] = useState(true)
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
+  const [videoVolume, setVideoVolume] = useState(0.8)
+  const [isVideoMuted, setIsVideoMuted] = useState(false)
+  const [isVideoFullscreen, setIsVideoFullscreen] = useState(false)
+  const [segmentPlaybackTime, setSegmentPlaybackTime] = useState(0)
+  const [timelineNoteFilter, setTimelineNoteFilter] = useState<string | null>(null)
+  const [timelineSettingsOpen, setTimelineSettingsOpen] = useState(false)
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState(0)
+  const [activePlaybackRowId, setActivePlaybackRowId] = useState<string | null>(null)
   const savedBadgeTimeout = useRef<number | undefined>(undefined)
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null)
   const transcriptScrollbarTimeout = useRef<number | undefined>(undefined)
   const instructionScrollRef = useRef<HTMLDivElement | null>(null)
   const instructionScrollbarTimeout = useRef<number | undefined>(undefined)
   const annotationPanelRef = useRef<HTMLDivElement | null>(null)
+  const videoContainerRef = useRef<HTMLDivElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const activeVideoTranscriptRef = useRef<string | null>(null)
+  const playbackRowRef = useRef<string | null>(null)
   const noteCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
+  const timelineSettingsRef = useRef<HTMLDivElement | null>(null)
   const dragStateRef = useRef<{
     isPointerDown: boolean
     hasDragged: boolean
@@ -559,6 +670,243 @@ function AnnotationPageContent() {
         window.clearTimeout(instructionScrollbarTimeout.current)
       }
     }
+  }, [])
+
+  useEffect(() => {
+    if (!timelineSettingsOpen) return
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null
+      if (timelineSettingsRef.current?.contains(target ?? null)) return
+      setTimelineSettingsOpen(false)
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTimelineSettingsOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handleOutsideClick)
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [timelineSettingsOpen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mediaQuery = window.matchMedia('(pointer: coarse)')
+    const handlePointerChange = () => {
+      const coarse = mediaQuery.matches
+      setIsCoarsePointer(coarse)
+      if (!hasPlayedOnce) {
+        setShowVideoControls(false)
+        return
+      }
+      if (coarse) {
+        setShowVideoControls(true)
+      }
+    }
+
+    handlePointerChange()
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handlePointerChange)
+      return () => mediaQuery.removeEventListener('change', handlePointerChange)
+    }
+    mediaQuery.addListener(handlePointerChange)
+    return () => mediaQuery.removeListener(handlePointerChange)
+  }, [hasPlayedOnce])
+
+  const handleVideoPlayClick = () => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+    if (
+      videoElement.currentTime < segmentStartTime ||
+      (segmentEndTime !== null && videoElement.currentTime >= segmentEndTime)
+    ) {
+      videoElement.currentTime = segmentStartTime
+      setSegmentPlaybackTime(0)
+    }
+    const playPromise = videoElement.play()
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {
+        if (!hasPlayedOnce) setShowVideoPlayOverlay(true)
+      })
+    }
+  }
+
+  const handleVideoPlay = () => {
+    setHasPlayedOnce(true)
+    setShowVideoControls(true)
+    setShowVideoPlayOverlay(false)
+    setIsVideoPlaying(true)
+  }
+
+  const handleVideoLoadedMetadata = () => {
+    const duration = videoRef.current?.duration
+    if (typeof duration === 'number' && Number.isFinite(duration)) {
+      setVideoDuration(duration)
+    }
+    if (videoRef.current) {
+      videoRef.current.currentTime = segmentStartTime
+      setSegmentPlaybackTime(0)
+    }
+  }
+
+  const handleVideoPause = () => {
+    setIsVideoPlaying(false)
+    if (!hasPlayedOnce) {
+      setShowVideoPlayOverlay(true)
+    }
+  }
+
+  const handleTogglePlayback = () => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+    if (videoElement.paused || videoElement.ended) {
+      if (
+        videoElement.currentTime < segmentStartTime ||
+        (segmentEndTime !== null && videoElement.currentTime >= segmentEndTime)
+      ) {
+        applySegmentTime(segmentStartTime)
+      }
+      const playPromise = videoElement.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          if (!hasPlayedOnce) setShowVideoPlayOverlay(true)
+        })
+      }
+      return
+    }
+    videoElement.pause()
+  }
+
+  const handleVolumeChange = (nextVolume: number) => {
+    if (!Number.isFinite(nextVolume)) return
+    const clampedVolume = Math.min(1, Math.max(0, nextVolume))
+    const videoElement = videoRef.current
+    if (videoElement) {
+      videoElement.volume = clampedVolume
+      videoElement.muted = clampedVolume === 0
+    }
+    setVideoVolume(clampedVolume)
+    setIsVideoMuted(clampedVolume === 0)
+  }
+
+  const handleToggleMute = () => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+    const nextMuted = !isVideoMuted
+    videoElement.muted = nextMuted
+    setIsVideoMuted(nextMuted)
+    if (!nextMuted && videoElement.volume === 0) {
+      videoElement.volume = 0.6
+      setVideoVolume(0.6)
+    }
+  }
+
+  const handleToggleFullscreen = () => {
+    const container = videoContainerRef.current
+    if (!container) return
+    if (document.fullscreenElement === container) {
+      if (typeof document.exitFullscreen === 'function') {
+        document.exitFullscreen()
+      }
+      return
+    }
+    if (typeof container.requestFullscreen === 'function') {
+      container.requestFullscreen()
+      return
+    }
+    const webkitContainer = container as HTMLDivElement & {
+      webkitRequestFullscreen?: () => void
+    }
+    if (typeof webkitContainer.webkitRequestFullscreen === 'function') {
+      webkitContainer.webkitRequestFullscreen()
+    }
+  }
+
+  const handleSegmentSeek = (nextTime: number) => {
+    if (!Number.isFinite(nextTime)) return
+    applySegmentTime(segmentStartTime + nextTime)
+  }
+
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement) {
+      setIsPictureInPicture(false)
+      return
+    }
+
+    const handleEnter = () => setIsPictureInPicture(true)
+    const handleLeave = () => setIsPictureInPicture(false)
+
+    videoElement.addEventListener('enterpictureinpicture', handleEnter)
+    videoElement.addEventListener('leavepictureinpicture', handleLeave)
+
+    const videoWithWebkit = videoElement as HTMLVideoElement & {
+      webkitPresentationMode?: string
+    }
+    const handleWebkitModeChange = () => {
+      if (typeof videoWithWebkit.webkitPresentationMode !== 'string') return
+      setIsPictureInPicture(
+        videoWithWebkit.webkitPresentationMode === 'picture-in-picture',
+      )
+    }
+
+    if (typeof videoWithWebkit.webkitPresentationMode === 'string') {
+      videoElement.addEventListener(
+        'webkitpresentationmodechanged',
+        handleWebkitModeChange,
+      )
+      handleWebkitModeChange()
+    } else if ('pictureInPictureElement' in document) {
+      setIsPictureInPicture(document.pictureInPictureElement === videoElement)
+    } else {
+      setIsPictureInPicture(false)
+    }
+
+    return () => {
+      videoElement.removeEventListener('enterpictureinpicture', handleEnter)
+      videoElement.removeEventListener('leavepictureinpicture', handleLeave)
+      if (typeof videoWithWebkit.webkitPresentationMode === 'string') {
+        videoElement.removeEventListener(
+          'webkitpresentationmodechanged',
+          handleWebkitModeChange,
+        )
+      }
+    }
+  }, [videoSource?.url])
+
+  const scrollRowIntoView = useCallback((rowId: string, alignToTop = false) => {
+    const container = transcriptScrollRef.current
+    const rowElement = document.querySelector<HTMLTableRowElement>(
+      `[data-row-id="${rowId}"]`,
+    )
+    if (!rowElement) return
+
+    window.requestAnimationFrame(() => {
+      if (container && container.contains(rowElement)) {
+        const containerRect = container.getBoundingClientRect()
+        const rowRect = rowElement.getBoundingClientRect()
+        const offsetTop = rowRect.top - containerRect.top + container.scrollTop
+        const targetTop = alignToTop ? offsetTop : Math.max(offsetTop - 24, 0)
+        container.scrollTo({
+          top: targetTop,
+          behavior: 'smooth',
+        })
+        return
+      }
+      rowElement.scrollIntoView({
+        behavior: 'smooth',
+        block: alignToTop ? 'start' : 'nearest',
+        inline: 'nearest',
+      })
+    })
   }, [])
 
   useEffect(() => {
@@ -669,6 +1017,242 @@ function AnnotationPageContent() {
     })
   }, [activeSegmentRows, rowFlags, searchQuery, showFlaggedOnly, speakerFilter])
 
+  const rowsWithCues = useMemo(() => {
+    const rows = activeSegmentRows.filter((row) => row.inCue !== null)
+    return rows.sort(
+      (rowA, rowB) => (rowA.inCue ?? 0) - (rowB.inCue ?? 0),
+    )
+  }, [activeSegmentRows])
+
+  const segmentTimeRange = useMemo(() => {
+    const cueStarts: number[] = []
+    const cueEnds: number[] = []
+
+    activeSegmentRows.forEach((row) => {
+      if (typeof row.inCue === 'number' && Number.isFinite(row.inCue)) {
+        cueStarts.push(row.inCue)
+      }
+      const endCandidate = row.outCue ?? row.inCue
+      if (typeof endCandidate === 'number' && Number.isFinite(endCandidate)) {
+        cueEnds.push(endCandidate)
+      }
+    })
+
+    const fallbackStart =
+      cueStarts.length > 0 ? Math.min(...cueStarts) : null
+    const fallbackEnd = cueEnds.length > 0 ? Math.max(...cueEnds) : null
+    const rawStart = activeSegment?.startTime ?? fallbackStart ?? 0
+    const startTime =
+      typeof rawStart === 'number' && Number.isFinite(rawStart) ? Math.max(rawStart, 0) : 0
+    const rawEnd = activeSegment?.endTime ?? fallbackEnd ?? videoDuration ?? null
+    const endTime =
+      typeof rawEnd === 'number' && Number.isFinite(rawEnd)
+        ? Math.max(rawEnd, startTime)
+        : null
+    const duration = endTime !== null ? Math.max(endTime - startTime, 0) : null
+
+    return { startTime, endTime, duration }
+  }, [activeSegment?.endTime, activeSegment?.startTime, activeSegmentRows, videoDuration])
+
+  const segmentStartTime = segmentTimeRange.startTime
+  const segmentEndTime = segmentTimeRange.endTime
+  const segmentDuration = segmentTimeRange.duration
+
+  const clampVideoTimeToSegment = useCallback(
+    (time: number) => {
+      if (time < segmentStartTime) return segmentStartTime
+      if (segmentEndTime !== null && time > segmentEndTime) return segmentEndTime
+      return time
+    },
+    [segmentEndTime, segmentStartTime],
+  )
+
+  const applySegmentTime = useCallback(
+    (absoluteTime: number) => {
+      if (!Number.isFinite(absoluteTime)) return
+      const clampedTime = clampVideoTimeToSegment(absoluteTime)
+      const videoElement = videoRef.current
+      if (videoElement) {
+        videoElement.currentTime = clampedTime
+      }
+      setSegmentPlaybackTime(Math.max(0, clampedTime - segmentStartTime))
+    },
+    [clampVideoTimeToSegment, segmentStartTime],
+  )
+
+  const resetSegmentPlayback = useCallback(() => {
+    const videoElement = videoRef.current
+    if (videoElement) {
+      videoElement.pause()
+      videoElement.currentTime = segmentStartTime
+    }
+    setSegmentPlaybackTime(0)
+    setHasPlayedOnce(false)
+    setShowVideoPlayOverlay(true)
+    setShowVideoControls(false)
+    setIsVideoPlaying(false)
+  }, [segmentStartTime])
+
+  const selectedTimelineNote = useMemo(
+    () => noteBadges.find((note) => note.id === timelineNoteFilter) ?? null,
+    [noteBadges, timelineNoteFilter],
+  )
+
+  const timelineNoteSegments = useMemo(() => {
+    if (!timelineNoteFilter) return []
+    const duration = segmentDuration
+    if (!duration || !Number.isFinite(duration) || duration <= 0) return []
+
+    return rowsWithCues.reduce<Array<{ start: number; end: number; rowId: string }>>(
+      (segments, row, index) => {
+        if (!rowAssignedNotes[row.id]?.[timelineNoteFilter]) {
+          return segments
+        }
+
+        const absoluteStart = row.inCue
+        if (typeof absoluteStart !== 'number' || !Number.isFinite(absoluteStart)) {
+          return segments
+        }
+
+        const nextStartCandidate =
+          row.outCue ?? rowsWithCues[index + 1]?.inCue ?? segmentEndTime ?? absoluteStart
+        const absoluteEnd =
+          typeof nextStartCandidate === 'number' && Number.isFinite(nextStartCandidate)
+            ? nextStartCandidate
+            : absoluteStart
+        const relativeStart = absoluteStart - segmentStartTime
+        const relativeEnd = absoluteEnd - segmentStartTime
+        if (relativeEnd <= 0 || relativeStart >= duration) {
+          return segments
+        }
+        const clampedStart = Math.max(relativeStart, 0)
+        const clampedEnd = Math.min(relativeEnd, duration)
+        const safeEnd =
+          clampedEnd > clampedStart
+            ? clampedEnd
+            : Math.min(duration, clampedStart + 0.5)
+
+        segments.push({
+          start: clampedStart,
+          end: safeEnd,
+          rowId: row.id,
+        })
+        return segments
+      },
+      [],
+    )
+  }, [
+    rowAssignedNotes,
+    rowsWithCues,
+    segmentDuration,
+    segmentEndTime,
+    segmentStartTime,
+    timelineNoteFilter,
+  ])
+
+  const findRowForTime = useCallback(
+    (currentTime: number) => {
+      if (!rowsWithCues.length) return null
+      const firstRow = rowsWithCues[0]
+      if (!firstRow) return null
+      if (currentTime < (firstRow.inCue ?? 0)) {
+        return firstRow
+      }
+      for (let index = 0; index < rowsWithCues.length; index += 1) {
+        const row = rowsWithCues[index]
+        const start = row.inCue ?? 0
+        const nextStart = rowsWithCues[index + 1]?.inCue ?? Number.POSITIVE_INFINITY
+        const end = row.outCue ?? nextStart
+
+        if (currentTime >= start && currentTime < end) {
+          return row
+        }
+
+        // If we're between this row's end and the next start (a gap), keep this row active
+        if (currentTime >= end && currentTime < nextStart) {
+          return row
+        }
+      }
+      return rowsWithCues[rowsWithCues.length - 1]
+    },
+    [rowsWithCues],
+  )
+
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement || !videoSource?.url) return
+
+    const handleTimeUpdate = () => {
+      let currentTime = videoElement.currentTime
+      if (currentTime < segmentStartTime) {
+        currentTime = segmentStartTime
+        videoElement.currentTime = segmentStartTime
+      }
+      if (segmentEndTime !== null && currentTime >= segmentEndTime) {
+        videoElement.pause()
+        videoElement.currentTime = segmentEndTime
+        currentTime = segmentEndTime
+      }
+      setSegmentPlaybackTime(Math.max(0, currentTime - segmentStartTime))
+
+      if (rowsWithCues.length === 0) return
+      const currentRow = findRowForTime(currentTime)
+      if (!currentRow) return
+      if (playbackRowRef.current === currentRow.id) return
+      playbackRowRef.current = currentRow.id
+      setActivePlaybackRowId(currentRow.id)
+      scrollRowIntoView(currentRow.id, true)
+    }
+
+    videoElement.addEventListener('timeupdate', handleTimeUpdate)
+    return () => {
+      videoElement.removeEventListener('timeupdate', handleTimeUpdate)
+    }
+  }, [
+    findRowForTime,
+    rowsWithCues.length,
+    scrollRowIntoView,
+    segmentEndTime,
+    segmentStartTime,
+    videoSource?.url,
+  ])
+
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+    videoElement.volume = videoVolume
+    videoElement.muted = isVideoMuted
+  }, [isVideoMuted, videoSource?.url, videoVolume])
+
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+
+    const handleVolumeChange = () => {
+      const nextVolume = Number.isFinite(videoElement.volume)
+        ? videoElement.volume
+        : 0
+      setVideoVolume(nextVolume)
+      setIsVideoMuted(videoElement.muted || nextVolume === 0)
+    }
+
+    videoElement.addEventListener('volumechange', handleVolumeChange)
+    return () => {
+      videoElement.removeEventListener('volumechange', handleVolumeChange)
+    }
+  }, [videoSource?.url])
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsVideoFullscreen(
+        document.fullscreenElement === videoContainerRef.current,
+      )
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () =>
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
   useEffect(() => {
     if (!selectedRow) return
 
@@ -720,9 +1304,16 @@ function AnnotationPageContent() {
   }, [filteredRows, isDragSelecting, selectRow, selectedRow])
 
   useEffect(() => {
+    if (!videoSource?.url) return
+    resetSegmentPlayback()
+  }, [resetSegmentPlayback, videoSource?.url])
+
+  useEffect(() => {
     if (!hasMultipleSegments) return
     setCheckedRows({})
     setSelectedRow(activeSegmentRows[0]?.id ?? null)
+    setActivePlaybackRowId(null)
+    playbackRowRef.current = null
   }, [activeSegmentRows, hasMultipleSegments])
 
   const pageBackgroundStyle = useMemo(
@@ -815,6 +1406,9 @@ function AnnotationPageContent() {
       setTranscriptError(null)
       setInstructionCards([])
       setInstructionCardsError(null)
+      setVideoSource(null)
+      setVideoSourceError(null)
+      activeVideoTranscriptRef.current = transcriptId
 
       try {
         const response = await fetch(
@@ -834,6 +1428,8 @@ function AnnotationPageContent() {
           line: String(line.line ?? 0).padStart(3, '0'),
           speaker: line.speaker || 'Unknown speaker',
           utterance: line.utterance ?? '',
+          inCue: parseCueValue(line.inCue),
+          outCue: parseCueValue(line.outCue),
           segmentId: line.segmentId ?? null,
           flagged: Boolean(line.flagged),
         }))
@@ -842,6 +1438,8 @@ function AnnotationPageContent() {
             id: segment.id,
             title: segment.title,
             index: segment.index,
+            startTime: parseCueValue(segment.startTime),
+            endTime: parseCueValue(segment.endTime),
           }))
           .sort((segmentA, segmentB) => segmentA.index - segmentB.index)
         const initialRows =
@@ -855,7 +1453,6 @@ function AnnotationPageContent() {
         setTranscriptMeta(payload.transcript)
         setTranscriptRows(normalizedLines)
         setTranscriptSegments(normalizedSegments)
-        setActiveSegmentIndex(0)
         loadInstructionalMaterials(transcriptId)
         setRowFlags(
           normalizedLines.reduce((acc, row) => {
@@ -864,23 +1461,69 @@ function AnnotationPageContent() {
           }, {} as Record<string, boolean>),
         )
         setRowAssignedNotes(buildRowAssignments(normalizedLines, notes, assignmentsByRow))
+        setStaticNoteAssignmentsByRow(createStaticNoteAssignments(normalizedLines))
         setCheckedRows({})
         setSelectedRow(initialRows[0]?.id ?? null)
+        setActivePlaybackRowId(null)
+        playbackRowRef.current = null
+        setActiveSegmentIndex(0)
+        setSegmentPlaybackTime(0)
+        setHasPlayedOnce(false)
+        setShowVideoControls(false)
+        setShowVideoPlayOverlay(true)
+        setIsVideoPlaying(false)
+        setTimelineNoteFilter(null)
+        setVideoDuration(null)
+
+        const videoResponse = await fetch(
+          `/api/annotator/transcripts/${encodeURIComponent(
+            transcriptId,
+          )}/video?transcriptId=${encodeURIComponent(transcriptId)}`,
+        )
+        const videoPayload: VideoResponse | null = await videoResponse
+          .json()
+          .catch(() => null)
+
+        if (activeVideoTranscriptRef.current !== transcriptId) {
+          return
+        }
+
+        if (!videoResponse.ok || !videoPayload?.success) {
+          const message = videoPayload?.error ?? 'Unable to load video.'
+          setVideoSource(null)
+          setVideoSourceError(message)
+        } else {
+          setVideoSource(videoPayload.video ?? null)
+          setVideoSourceError(null)
+        }
       } catch (error) {
         console.error('Failed to load transcript', error)
         setTranscriptMeta(null)
         setTranscriptRows([])
         setTranscriptSegments([])
-        setActiveSegmentIndex(0)
+        setInstructionCards([])
+        setInstructionCardsError(null)
         setRowFlags({})
         setRowAssignedNotes({})
+        setStaticNoteAssignmentsByRow({})
         setNoteBadges([])
         setExpandedNotes({})
+        setExpandedStaticNotes({})
         setNoteDetailsDrafts({})
         setNoteTitleDrafts({})
         setNotesError(null)
-        setInstructionCards([])
-        setInstructionCardsError(null)
+        setActivePlaybackRowId(null)
+        playbackRowRef.current = null
+        setActiveSegmentIndex(0)
+        setSegmentPlaybackTime(0)
+        setHasPlayedOnce(false)
+        setShowVideoControls(false)
+        setShowVideoPlayOverlay(true)
+        setIsVideoPlaying(false)
+        setTimelineNoteFilter(null)
+        setVideoDuration(null)
+        setVideoSource(null)
+        setVideoSourceError(null)
         const message =
           error instanceof Error ? error.message : 'Unable to load transcript.'
         setTranscriptError(message)
@@ -911,18 +1554,28 @@ function AnnotationPageContent() {
       setTranscriptMeta(null)
       setTranscriptRows([])
       setTranscriptSegments([])
-      setActiveSegmentIndex(0)
+      setInstructionCards([])
+      setInstructionCardsError(null)
       setRowFlags({})
       setRowAssignedNotes({})
+      setStaticNoteAssignmentsByRow({})
       setNoteBadges([])
       setExpandedNotes({})
+      setExpandedStaticNotes({})
       setNoteDetailsDrafts({})
       setNoteTitleDrafts({})
       setNotesError(null)
-      setInstructionCards([])
-      setInstructionCardsError(null)
       setCheckedRows({})
       setSelectedRow(null)
+      setActiveSegmentIndex(0)
+      setSegmentPlaybackTime(0)
+      setHasPlayedOnce(false)
+      setShowVideoControls(false)
+      setShowVideoPlayOverlay(true)
+      setIsVideoPlaying(false)
+      setVideoSource(null)
+      setVideoSourceError(null)
+      activeVideoTranscriptRef.current = null
       setIsLoadingTranscript(false)
       setIsLoadingInstructionCards(false)
       setTranscriptError('Choose a transcript from your workspace to begin annotating.')
@@ -958,13 +1611,36 @@ function AnnotationPageContent() {
     [isDragSelecting, selectRow],
   )
 
+  const handleRowDoubleClick = useCallback(
+    (rowId: string) => {
+      const videoElement = videoRef.current
+      if (!videoElement) return
+      const row = activeSegmentRows.find((entry) => entry.id === rowId)
+      if (!row) return
+      const cueTime = row.inCue ?? row.outCue
+      if (cueTime === null || cueTime === undefined) return
+      if (!Number.isFinite(cueTime)) return
+
+      applySegmentTime(Math.max(cueTime, 0))
+      const playPromise = videoElement.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          /* Ignore autoplay rejection; user can tap play */
+        })
+      }
+      setActivePlaybackRowId(row.id)
+      playbackRowRef.current = row.id
+    },
+    [activeSegmentRows, applySegmentTime],
+  )
+
   const checkedRowDetails = useMemo(
-    () => transcriptRows.filter((row) => checkedRows[row.id]),
-    [checkedRows, transcriptRows],
+    () => activeSegmentRows.filter((row) => checkedRows[row.id]),
+    [activeSegmentRows, checkedRows],
   )
   const checkedRowCount = checkedRowDetails.length
   const selectedRowData =
-    transcriptRows.find((row) => row.id === selectedRow) ?? null
+    activeSegmentRows.find((row) => row.id === selectedRow) ?? null
   const firstCheckedRow = selectedRowData ? null : checkedRowDetails[0] ?? null
   const activeRowData = selectedRowData ?? firstCheckedRow ?? null
   const activeRowId = activeRowData?.id ?? null
@@ -1030,6 +1706,15 @@ function AnnotationPageContent() {
       }
     })
   }, [noteBadges, noteSelectionState])
+  const noteHighlightColorMap = useMemo(
+    () =>
+      noteBadges.reduce((acc, note, index) => {
+        acc[note.id] =
+          NOTE_HIGHLIGHT_COLORS[index % NOTE_HIGHLIGHT_COLORS.length]
+        return acc
+      }, {} as Record<string, string>),
+    [noteBadges],
+  )
   const annotationPanelTitle = useMemo(() => {
     const formatLineTitle = (
       lineValue: string | number | null | undefined,
@@ -1057,6 +1742,13 @@ function AnnotationPageContent() {
 
     return 'Select a line'
   }, [checkedRowDetails, selectedRowData])
+  const timelineHighlightColorClass =
+    (timelineNoteFilter ? noteHighlightColorMap[timelineNoteFilter] : null) ??
+    'bg-indigo-400'
+  const hasTimelineHighlights =
+    timelineNoteFilter !== null && timelineNoteSegments.length > 0
+  const timelineTrackDuration =
+    segmentDuration && segmentDuration > 0 ? segmentDuration : null
   const hasCheckedRows = checkedRowCount > 0
   const hasMultipleCheckedRows = checkedRowCount > 1
   const annotationTabs = [
@@ -1096,18 +1788,53 @@ function AnnotationPageContent() {
     checkedRowDetails.length - visibleCheckedRows.length,
     0,
   )
-  const activeSegmentLabel = hasMultipleSegments
-    ? `Section ${activeSegmentIndex + 1} of ${transcriptSegments.length}`
-    : 'Transcript'
-  const hasPreviousSegment = hasMultipleSegments && activeSegmentIndex > 0
-  const hasNextSegment =
-    hasMultipleSegments && activeSegmentIndex < transcriptSegments.length - 1
   const lineColumnWidth = '6.5rem'
   const speakerColumnWidth = '8.25rem'
   const noteColumnWidth = '12rem'
-  const visibleRowTotal = hasMultipleSegments
-    ? activeSegmentRows.length
-    : transcriptRows.length
+  const hasVideo = Boolean(videoSource?.url)
+  const isTranscriptEmpty = hasVideo
+    ? activeSegmentRows.length === 0
+    : transcriptRows.length === 0
+  const hasRowsForFilters = hasVideo
+    ? activeSegmentRows.length > 0
+    : transcriptRows.length > 0
+  const tableHeadClass = hasVideo
+    ? 'rounded-2xl bg-white'
+    : 'sticky top-0 z-20 rounded-2xl bg-white/95 backdrop-blur'
+  const lineHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky left-0 top-0 z-30 bg-white px-3 py-3 backdrop-blur'
+  const speakerHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky top-0 z-30 bg-white px-3 py-3 backdrop-blur'
+  const standardHeaderClass = hasVideo
+    ? 'bg-white px-3 py-2 align-middle'
+    : 'sticky top-0 z-10 bg-white px-3 py-3'
+  const activeSegmentLabel = hasMultipleSegments
+    ? `Section ${activeSegmentIndex + 1} of ${transcriptSegments.length}`
+    : null
+  const hasPreviousSegment = hasMultipleSegments && activeSegmentIndex > 0
+  const hasNextSegment =
+    hasMultipleSegments && activeSegmentIndex < transcriptSegments.length - 1
+  const segmentPlaybackValue =
+    segmentDuration && segmentDuration > 0
+      ? Math.min(segmentPlaybackTime, segmentDuration)
+      : 0
+  const isSegmentSeekEnabled =
+    hasVideo && Boolean(segmentDuration && segmentDuration > 0)
+  const resolvedVideoMimeType = useMemo(() => {
+    const rawMimeType = videoSource?.mimeType?.trim().toLowerCase()
+    if (!rawMimeType) return 'video/mp4'
+    if (typeof document === 'undefined') {
+      return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+    }
+
+    const canPlay = document.createElement('video').canPlayType(rawMimeType)
+    if (canPlay) return rawMimeType
+    return rawMimeType === 'video/quicktime' ? 'video/mp4' : rawMimeType
+  }, [videoSource?.mimeType])
+  const shouldShowPlayOverlay =
+    hasVideo && !hasPlayedOnce && showVideoPlayOverlay
 
   const handleInstructionImageClick = useCallback((card: InstructionCard) => {
     setActiveInstructionImage({ src: card.imageUrl, title: card.title })
@@ -1292,6 +2019,7 @@ function AnnotationPageContent() {
 
         return didChange ? nextAssignments : prev
       })
+      setTimelineNoteFilter((current) => (current === noteId ? null : current))
       setDeleteNoteId(null)
       triggerSavedBadge()
     } catch (error) {
@@ -1394,6 +2122,20 @@ function AnnotationPageContent() {
       }
       return next
     })
+  }
+
+  const handleTimelineNoteSelect = (noteId: string | null) => {
+    setTimelineNoteFilter((current) => (current === noteId ? null : noteId))
+    setTimelineSettingsOpen(false)
+  }
+
+  const handleStaticNoteBadgeToggle = (noteId: string) => {
+    setAnnotationCollapsed(false)
+    setActiveAnnotationTab('assign')
+    setExpandedStaticNotes((previous) => ({
+      ...previous,
+      [noteId]: !(previous[noteId] ?? false),
+    }))
   }
 
   const handleNoteCheckboxChange = (noteId: string, nextChecked: boolean) => {
@@ -1937,37 +2679,37 @@ function AnnotationPageContent() {
                       const hasTitle = Boolean(card.title)
                       const fallbackLabel = 'Instructional material image'
                       return (
-                      <div
-                        key={card.id}
-                        className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-200/70"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleInstructionImageClick(card)}
-                          className="group relative block w-full overflow-hidden rounded-2xl bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-                          aria-label={
-                            hasTitle ? `View ${card.title}` : 'View instructional material image'
-                          }
+                        <div
+                          key={card.id}
+                          className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-200/70"
                         >
-                          <Image
-                            src={card.imageUrl}
-                            alt={hasTitle ? card.title : fallbackLabel}
-                            width={320}
-                            height={144}
-                            className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            sizes="(min-width: 1024px) 320px, 100vw"
-                          />
-                          <span className="sr-only">
-                            {hasTitle ? `Expand ${card.title}` : 'Expand instructional material'}
-                          </span>
-                        </button>
-                        {hasTitle && (
-                          <h3 className="mt-3 text-base font-semibold text-slate-900">
-                            {card.title}
-                          </h3>
-                        )}
-                      </div>
-                    )
+                          <button
+                            type="button"
+                            onClick={() => handleInstructionImageClick(card)}
+                            className="group relative block w-full overflow-hidden rounded-2xl bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                            aria-label={
+                              hasTitle ? `View ${card.title}` : 'View instructional material image'
+                            }
+                          >
+                            <Image
+                              src={card.imageUrl}
+                              alt={hasTitle ? card.title : fallbackLabel}
+                              width={320}
+                              height={144}
+                              className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              sizes="(min-width: 1024px) 320px, 100vw"
+                            />
+                            <span className="sr-only">
+                              {hasTitle ? `Expand ${card.title}` : 'Expand instructional material'}
+                            </span>
+                          </button>
+                          {hasTitle && (
+                            <h3 className="mt-3 text-base font-semibold text-slate-900">
+                              {card.title}
+                            </h3>
+                          )}
+                        </div>
+                      )
                     })
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
@@ -2015,35 +2757,338 @@ function AnnotationPageContent() {
           </aside>
 
           <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70">
-              {hasMultipleSegments && (
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 text-sm font-semibold text-slate-700">
-                  <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
-                    {activeSegmentLabel}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {hasPreviousSegment && (
-                      <button
-                        type="button"
-                        onClick={() => handleSegmentNavigate(-1)}
-                        aria-label="Previous section"
-                        className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+            <div
+              className={`flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70 ${
+                hasVideo ? 'relative gap-3' : ''
+              }`}
+            >
+              {hasVideo ? (
+                <div
+                  className={`flex flex-col gap-3 transition-all duration-300 ${
+                    isPictureInPicture
+                      ? 'absolute left-0 top-0 invisible pointer-events-none'
+                      : ''
+                  }`}
+                  aria-hidden={isPictureInPicture}
+                >
+                  {hasMultipleSegments && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-0 text-sm font-semibold text-slate-700">
+                      <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
+                        {activeSegmentLabel}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {hasPreviousSegment && (
+                          <button
+                            type="button"
+                            onClick={() => handleSegmentNavigate(-1)}
+                            aria-label="Previous section"
+                            className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                        )}
+                        {hasNextSegment && (
+                          <button
+                            type="button"
+                            onClick={() => handleSegmentNavigate(1)}
+                            aria-label="Next section"
+                            className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    ref={videoContainerRef}
+                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                    onMouseEnter={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                    onMouseLeave={() => {
+                      if (!hasPlayedOnce || isCoarsePointer) return
+                      setShowVideoControls(false)
+                    }}
+                    onFocusCapture={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                    onBlurCapture={(event) => {
+                      if (!hasPlayedOnce || isCoarsePointer) return
+                      const nextTarget = event.relatedTarget as Node | null
+                      if (nextTarget && event.currentTarget.contains(nextTarget)) {
+                        return
+                      }
+                      setShowVideoControls(false)
+                    }}
+                    onTouchStart={() => {
+                      if (!hasPlayedOnce) return
+                      setShowVideoControls(true)
+                    }}
+                  >
+                    {timelineNoteFilter && timelineTrackDuration && (
+                      <div
+                        className={`pointer-events-none absolute inset-x-4 ${
+                          showVideoControls ? 'bottom-16' : 'bottom-3'
+                        } z-30 h-2 overflow-visible`}
                       >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
+                        {timelineNoteSegments.map((segment, index) => {
+                          const startPercent = Math.max(
+                            0,
+                            (segment.start / timelineTrackDuration) * 100,
+                          )
+                          const clampedStart = Math.min(100, startPercent)
+                          const endPercent = Math.min(
+                            100,
+                            (segment.end / timelineTrackDuration) * 100,
+                          )
+                          const widthPercent = Math.min(
+                            Math.max(endPercent - clampedStart, 0.8),
+                            100 - clampedStart,
+                          )
+                          return (
+                            <span
+                              key={`${segment.rowId}-${index}`}
+                              className={`absolute top-0 bottom-0 rounded-full shadow-sm shadow-slate-900/30 ${timelineHighlightColorClass}`}
+                              style={{
+                                left: `${clampedStart}%`,
+                                width: `${widthPercent}%`,
+                                opacity: 0.9,
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
                     )}
-                    {hasNextSegment && (
-                      <button
-                        type="button"
-                        onClick={() => handleSegmentNavigate(1)}
-                        aria-label="Next section"
-                        className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                    <video
+                      key={videoSource?.url ?? 'empty-video'}
+                      ref={videoRef}
+                      className="video-annotate-player h-full w-full max-h-[360px] bg-white"
+                      data-controls-visible={showVideoControls ? 'true' : 'false'}
+                      tabIndex={isPictureInPicture ? -1 : 0}
+                      controls={false}
+                      playsInline
+                      preload="metadata"
+                      poster={WHITE_VIDEO_POSTER}
+                      onContextMenu={(event) => event.preventDefault()}
+                      onClick={handleTogglePlayback}
+                      onPlay={handleVideoPlay}
+                      onPause={handleVideoPause}
+                      onEnded={handleVideoPause}
+                      onLoadedMetadata={handleVideoLoadedMetadata}
+                    >
+                      {videoSource?.url ? (
+                        <source
+                          src={videoSource.url}
+                          type={resolvedVideoMimeType}
+                        />
+                      ) : null}
+                      Your browser does not support the video tag.
+                    </video>
+                    {!isLoadingTranscript && !videoSource?.url && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm shadow-slate-200/70">
+                          {videoSourceError ?? 'No video uploaded for this transcript.'}
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleVideoPlayClick}
+                      aria-label="Play video"
+                      className={`absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950/30 text-white shadow-[0_10px_30px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
+                        shouldShowPlayOverlay
+                          ? ''
+                          : 'pointer-events-none opacity-0'
+                      }`}
+                      aria-hidden={!shouldShowPlayOverlay}
+                      tabIndex={shouldShowPlayOverlay ? 0 : -1}
+                    >
+                      <svg
+                        width="22"
+                        height="26"
+                        viewBox="0 0 22 26"
+                        fill="currentColor"
+                        aria-hidden="true"
                       >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
+                        <path
+                          d="M5 4.2c0-1.18 1.3-1.9 2.34-1.2l11.2 7a1.5 1.5 0 0 1 0 2.6l-11.2 7c-1.04.66-2.34-.06-2.34-1.26V4.2Z"
+                        />
+                      </svg>
+                    </button>
+                    {videoSource?.url && (
+                      <div
+                        className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-4 pb-3 pt-8 text-white transition duration-200 ${
+                          showVideoControls ? 'opacity-100' : 'pointer-events-none opacity-0'
+                        }`}
+                      >
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/80 via-slate-950/40 to-transparent" />
+                        <input
+                          type="range"
+                          min={0}
+                          max={segmentDuration ?? 0}
+                          step={0.1}
+                          value={segmentPlaybackValue}
+                          onChange={(event) =>
+                            handleSegmentSeek(Number(event.target.value))
+                          }
+                          disabled={!isSegmentSeekEnabled}
+                          className="relative z-10 h-1 w-full cursor-pointer accent-white/90"
+                          aria-label="Seek within segment"
+                        />
+                        <div className="relative z-10 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleTogglePlayback}
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                              aria-label={isVideoPlaying ? 'Pause video' : 'Play video'}
+                            >
+                              {isVideoPlaying ? (
+                                <Pause className="h-4 w-4" />
+                              ) : (
+                                <Play className="h-4 w-4" />
+                              )}
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleToggleMute}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                                aria-label={isVideoMuted ? 'Unmute video' : 'Mute video'}
+                              >
+                                {isVideoMuted || videoVolume === 0 ? (
+                                  <VolumeX className="h-4 w-4" />
+                                ) : (
+                                  <Volume2 className="h-4 w-4" />
+                                )}
+                              </button>
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={videoVolume}
+                                onChange={(event) =>
+                                  handleVolumeChange(Number(event.target.value))
+                                }
+                                className="h-1 w-20 cursor-pointer accent-white/90"
+                                aria-label="Adjust volume"
+                              />
+                            </div>
+                            <span className="text-xs font-mono text-white/80">
+                              {formatTimestamp(segmentPlaybackValue)} /{' '}
+                              {formatTimestamp(segmentDuration)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="relative" ref={timelineSettingsRef}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setTimelineSettingsOpen((open) => !open)
+                                }
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                                aria-label="Timeline highlight settings"
+                                aria-expanded={timelineSettingsOpen}
+                                aria-controls="timeline-highlight-panel"
+                              >
+                                <Settings className="h-4 w-4" />
+                              </button>
+                              {timelineSettingsOpen && (
+                                <div
+                                  id="timeline-highlight-panel"
+                                  className="absolute bottom-full right-0 z-30 mb-3 w-56 rounded-2xl border border-slate-200 bg-white/80 p-3 text-slate-700 shadow-xl shadow-slate-900/10 backdrop-blur-md"
+                                >
+                                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                                    Timeline highlight
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-slate-500">
+                                    Show where a note tag appears across the
+                                    video.
+                                  </p>
+                                  <div className="mt-2 space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTimelineNoteSelect(null)}
+                                      className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
+                                        timelineNoteFilter === null
+                                          ? 'border border-slate-200 bg-slate-50 text-slate-900 shadow-sm'
+                                          : 'text-slate-600 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <span>Hide highlights</span>
+                                      {timelineNoteFilter === null && (
+                                        <Check className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                    {noteBadges.map((note) => {
+                                      const isActive =
+                                        timelineNoteFilter === note.id
+                                      return (
+                                        <button
+                                          key={note.id}
+                                          type="button"
+                                          onClick={() =>
+                                            handleTimelineNoteSelect(note.id)
+                                          }
+                                          className={`flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-xs transition ${
+                                            isActive
+                                              ? 'border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm'
+                                              : 'text-slate-600 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          <span className="text-left">
+                                            Show "{note.label}" on timeline
+                                          </span>
+                                          {isActive && (
+                                            <Check className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
+              ) : (
+                hasMultipleSegments && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 text-sm font-semibold text-slate-700">
+                    <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-slate-600">
+                      {activeSegmentLabel}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {hasPreviousSegment && (
+                        <button
+                          type="button"
+                          onClick={() => handleSegmentNavigate(-1)}
+                          aria-label="Previous section"
+                          className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                      )}
+                      {hasNextSegment && (
+                        <button
+                          type="button"
+                          onClick={() => handleSegmentNavigate(1)}
+                          aria-label="Next section"
+                          className="flex items-center justify-center rounded-xl p-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
               )}
               <div
                 ref={transcriptScrollRef}
@@ -2065,7 +3110,7 @@ function AnnotationPageContent() {
                   >
                     {transcriptError}
                   </div>
-                ) : transcriptRows.length === 0 ? (
+                ) : isTranscriptEmpty ? (
                   <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600">
                     No transcript lines available.
                   </div>
@@ -2079,10 +3124,10 @@ function AnnotationPageContent() {
                       {visibleColumns.utterance && <col />}
                       {visibleColumns.notes && <col style={{ width: noteColumnWidth }} />}
                     </colgroup>
-                    <thead className="sticky top-0 z-20 rounded-2xl bg-white/95 backdrop-blur">
+                    <thead className={tableHeadClass}>
                       <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
                         <th
-                          className="sticky left-0 top-0 z-30 bg-white px-3 py-3 backdrop-blur"
+                          className={lineHeaderClass}
                           style={{
                             width: lineColumnWidth,
                             minWidth: lineColumnWidth,
@@ -2092,24 +3137,29 @@ function AnnotationPageContent() {
                         </th>
                         {visibleColumns.speaker && (
                           <th
-                            className="sticky top-0 z-30 bg-white px-3 py-3 backdrop-blur"
-                            style={{
-                              left: lineColumnWidth,
-                              width: speakerColumnWidth,
-                              minWidth: speakerColumnWidth,
-                            }}
+                            className={speakerHeaderClass}
+                            style={
+                              hasVideo
+                                ? {
+                                    width: speakerColumnWidth,
+                                    minWidth: speakerColumnWidth,
+                                  }
+                                : {
+                                    left: lineColumnWidth,
+                                    width: speakerColumnWidth,
+                                    minWidth: speakerColumnWidth,
+                                  }
+                            }
                           >
                             Speaker
                           </th>
                         )}
                         {visibleColumns.utterance && (
-                          <th className="sticky top-0 z-10 bg-white px-3 py-3">
-                            Utterance
-                          </th>
+                          <th className={standardHeaderClass}>Utterance</th>
                         )}
                         {visibleColumns.notes && (
                           <th
-                            className="sticky top-0 z-10 bg-white px-3 py-3"
+                            className={standardHeaderClass}
                             style={{
                               width: noteColumnWidth,
                               minWidth: noteColumnWidth,
@@ -2124,10 +3174,19 @@ function AnnotationPageContent() {
                       {filteredRows.map((row) => {
                         const isSelected = selectedRow === row.id
                         const isChecked = Boolean(checkedRows[row.id])
-                        const isActive = isSelected || isChecked
+                        const isActive =
+                          isSelected || isChecked || activePlaybackRowId === row.id
                         const activeRowNotes = noteBadges.filter(
                           (note) => rowAssignedNotes[row.id]?.[note.id],
                         )
+                        const activeRowStaticNotes = showLlmAnnotations
+                          ? (staticNoteAssignmentsByRow[row.id] ?? [])
+                              .map((noteId) => STATIC_ASSIGN_NOTE_LOOKUP[noteId])
+                              .filter(
+                                (note): note is (typeof STATIC_ASSIGN_NOTES)[number] =>
+                                  Boolean(note),
+                              )
+                          : []
                         const speakerColor =
                           speakerColorMap[row.speaker] ?? fallbackSpeakerColor
                         const speakerChipClass = speakerColor.chip
@@ -2154,6 +3213,9 @@ function AnnotationPageContent() {
                             key={row.id}
                             data-row-id={row.id}
                             onClick={() => handleRowSelection(row.id)}
+                            onDoubleClick={
+                              hasVideo ? () => handleRowDoubleClick(row.id) : undefined
+                            }
                             onMouseDown={(event) => handleRowMouseDown(row.id, event)}
                             onMouseEnter={(event) => handleRowPointerDrag(row.id, event)}
                             onMouseMove={(event) => handleRowPointerDrag(row.id, event)}
@@ -2224,16 +3286,84 @@ function AnnotationPageContent() {
                                   minWidth: noteColumnWidth,
                                 }}
                               >
-                                {activeRowNotes.length > 0 && (
+                                {(hasVideo
+                                  ? activeRowNotes.length > 0 ||
+                                    activeRowStaticNotes.length > 0
+                                  : activeRowNotes.length > 0) && (
                                   <div className="flex flex-wrap gap-2">
-                                    {activeRowNotes.map((note) => (
-                                      <span
-                                        key={note.id}
-                                        className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100"
-                                      >
-                                        {note.label}
-                                      </span>
-                                    ))}
+                                    {activeRowNotes.map((note) => {
+                                      if (!hasVideo) {
+                                        return (
+                                          <span
+                                            key={note.id}
+                                            className="inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-sm shadow-slate-100"
+                                          >
+                                            {note.label}
+                                          </span>
+                                        )
+                                      }
+                                      const isTimelineNoteActive =
+                                        timelineNoteFilter === note.id
+                                      return (
+                                        <button
+                                          key={note.id}
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            handleTimelineNoteSelect(note.id)
+                                          }}
+                                          onMouseDown={(event) => event.stopPropagation()}
+                                          onMouseUp={(event) => event.stopPropagation()}
+                                          onDoubleClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          aria-pressed={isTimelineNoteActive}
+                                          title={
+                                            isTimelineNoteActive
+                                              ? `Hide "${note.label}" highlight`
+                                              : `Show "${note.label}" highlight`
+                                          }
+                                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold shadow-sm transition ${
+                                            isTimelineNoteActive
+                                              ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-indigo-100'
+                                              : 'border-slate-200 bg-white/80 text-slate-700 shadow-slate-100'
+                                          }`}
+                                        >
+                                          {note.label}
+                                        </button>
+                                      )
+                                    })}
+                                    {hasVideo &&
+                                      activeRowStaticNotes.map((note) => {
+                                        const isNoteExpanded =
+                                          expandedStaticNotes[note.id] ?? false
+                                        return (
+                                          <button
+                                            key={note.id}
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation()
+                                              handleStaticNoteBadgeToggle(note.id)
+                                            }}
+                                            onMouseDown={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            onMouseUp={(event) => event.stopPropagation()}
+                                            onDoubleClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            aria-expanded={isNoteExpanded}
+                                            title={
+                                              isNoteExpanded
+                                                ? `Collapse "${note.title}" details`
+                                                : `Expand "${note.title}" details`
+                                            }
+                                            className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 shadow-sm shadow-indigo-100 transition"
+                                          >
+                                            {note.title}
+                                          </button>
+                                        )
+                                      })}
                                   </div>
                                 )}
                               </td>
@@ -2248,7 +3378,7 @@ function AnnotationPageContent() {
               {filteredRows.length === 0 &&
                 !isLoadingTranscript &&
                 !transcriptError &&
-                transcriptRows.length > 0 && (
+                hasRowsForFilters && (
                 <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
                   No lines match your current filters. Try adjusting the search or speaker/flag
                   filters.
@@ -2596,7 +3726,9 @@ function AnnotationPageContent() {
                                         <div className="flex gap-3 pt-1">
                                           <button
                                             type="button"
-                                            onClick={() => openDeleteNoteModal(note.id)}
+                                            onClick={() =>
+                                              openDeleteNoteModal(note.id)
+                                            }
                                             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
                                           >
                                             Delete note
@@ -2674,19 +3806,21 @@ function AnnotationPageContent() {
                                                 {note.title}
                                               </div>
                                             </div>
-                                            {NOTE_DETAILS_FIELD_CONFIG.map((field) => (
-                                              <div
-                                                key={`${note.id}-${field.id}`}
-                                                className="space-y-2"
-                                              >
-                                                <p className="text-xs font-semibold text-slate-500">
-                                                  {field.label}
-                                                </p>
-                                                <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
-                                                  {note[field.questionKey]}
+                                            {NOTE_DETAILS_FIELD_CONFIG.map(
+                                              (field) => (
+                                                <div
+                                                  key={`${note.id}-${field.id}`}
+                                                  className="space-y-2"
+                                                >
+                                                  <p className="text-xs font-semibold text-slate-500">
+                                                    {field.label}
+                                                  </p>
+                                                  <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
+                                                    {note[field.noteKey]}
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            ))}
+                                              ),
+                                            )}
                                           </div>
                                         )}
                                       </div>

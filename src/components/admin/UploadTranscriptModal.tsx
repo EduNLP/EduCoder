@@ -29,7 +29,6 @@ export default function UploadTranscriptModal({
   const [transcriptName, setTranscriptName] = useState('')
   const [grade, setGrade] = useState('')
   const [mainFile, setMainFile] = useState<File | null>(null)
-  const [associatedFile, setAssociatedFile] = useState<File | null>(null)
   const [instructions, setInstructions] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -55,31 +54,11 @@ export default function UploadTranscriptModal({
     setMainFile(file)
   }
 
-  const handleAssociatedFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target
-    const file = input.files?.[0]
-    if (!file) {
-      return
-    }
-
-    const validation = await validateTranscriptSpreadsheet(file)
-    if (!validation.isValid) {
-      setErrorMessage(validation.error ?? SPREADSHEET_FILE_ERROR_MESSAGE)
-      setAssociatedFile(null)
-      input.value = ''
-      return
-    }
-
-    setErrorMessage(null)
-    setAssociatedFile(file)
-  }
-
   const resetForm = () => {
     setTranscriptName('')
     setGrade('')
     setInstructions('')
     setMainFile(null)
-    setAssociatedFile(null)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -109,14 +88,6 @@ export default function UploadTranscriptModal({
       return
     }
 
-    if (associatedFile) {
-      const associatedValidation = await validateTranscriptSpreadsheet(associatedFile)
-      if (!associatedValidation.isValid) {
-        setErrorMessage(associatedValidation.error ?? SPREADSHEET_FILE_ERROR_MESSAGE)
-        return
-      }
-    }
-
     try {
       setIsSubmitting(true)
       setErrorMessage(null)
@@ -126,9 +97,6 @@ export default function UploadTranscriptModal({
       formData.append('grade', trimmedGrade)
       formData.append('instructions', instructions)
       formData.append('mainFile', mainFile)
-      if (associatedFile) {
-        formData.append('associatedFile', associatedFile)
-      }
 
       const response = await fetch('/api/admin/transcripts/upload', {
         method: 'POST',
@@ -152,9 +120,7 @@ export default function UploadTranscriptModal({
           grade: payload.transcript.grade ?? trimmedGrade ?? null,
           transcript_file_name:
             payload.transcript.transcript_file_name ?? mainFile.name,
-          annotation_file_name:
-            payload.transcript.annotation_file_name ??
-            (associatedFile ? associatedFile.name : null),
+          annotation_file_name: payload.transcript.annotation_file_name ?? null,
         })
       }
 
@@ -191,7 +157,7 @@ export default function UploadTranscriptModal({
                 Upload New Transcript
               </h2>
               <p className="text-sm text-gray-600 mt-1">
-                Upload main and optional associated transcript files
+                Upload the main transcript file
               </p>
             </div>
             <button
@@ -295,53 +261,6 @@ export default function UploadTranscriptModal({
                     <div className="text-center">
                       <p className="text-sm font-medium text-gray-700 mb-1">
                         Click to upload main transcript
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {SPREADSHEET_HELP_TEXT} up to 10MB
-                      </p>
-                    </div>
-                  )}
-                </label>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Required columns: Line number, Speaker, and Utterance.
-              </p>
-            </div>
-
-            {/* Associated Transcript Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reference Annotation (LLM-Generated)
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-400 transition-colors">
-                <input
-                  type="file"
-                  id="associatedFile"
-                  accept={SPREADSHEET_ACCEPT}
-                  onChange={handleAssociatedFileChange}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="associatedFile"
-                  className="flex flex-col items-center cursor-pointer"
-                >
-                  <Upload className="w-12 h-12 text-gray-400 mb-3" />
-                  {associatedFile ? (
-                    <div className="text-center">
-                      <div className="flex items-center gap-2 bg-primary-50 px-4 py-2 rounded-lg">
-                        <FileText className="w-4 h-4 text-primary-600" />
-                        <span className="text-sm font-medium text-primary-700">
-                          {associatedFile.name}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Click to change file
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        Click to upload associated transcript
                       </p>
                       <p className="text-xs text-gray-500">
                         {SPREADSHEET_HELP_TEXT} up to 10MB
