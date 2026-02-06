@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
+const SYSTEM_USERNAME = 'llm-system'
 
 type NotePayload = {
   noteId?: string
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
 
     const annotator = await prisma.user.findFirst({
       where: { auth_user_id: authUserId },
-      select: { id: true },
+      select: { id: true, workspace_id: true },
     })
 
     if (!annotator) {
@@ -93,6 +94,37 @@ export async function GET(request: Request) {
           })
         : []
 
+    const llmSystemUser = await prisma.user.findFirst({
+      where: { workspace_id: annotator.workspace_id, username: SYSTEM_USERNAME },
+      select: { id: true },
+    })
+    const llmNotes = llmSystemUser
+      ? await prisma.notes.findMany({
+          where: {
+            transcript_id: transcriptId,
+            user_id: llmSystemUser.id,
+            source: 'llm',
+          },
+          orderBy: { note_number: 'asc' },
+          select: {
+            note_id: true,
+            note_number: true,
+            title: true,
+            q1: true,
+            q2: true,
+            q3: true,
+          },
+        })
+      : []
+    const llmNoteIds = llmNotes.map((note) => note.note_id)
+    const llmAssignments =
+      llmNoteIds.length > 0
+        ? await prisma.noteAssignments.findMany({
+            where: { note_id: { in: llmNoteIds } },
+            select: { note_id: true, line_id: true },
+          })
+        : []
+
     return NextResponse.json({
       success: true,
       notes: notes.map((note) => ({
@@ -104,6 +136,18 @@ export async function GET(request: Request) {
         q3: note.q3,
       })),
       assignments: assignments.map((assignment) => ({
+        noteId: assignment.note_id,
+        lineId: assignment.line_id,
+      })),
+      llmNotes: llmNotes.map((note) => ({
+        id: note.note_id,
+        number: note.note_number,
+        title: note.title,
+        q1: note.q1,
+        q2: note.q2,
+        q3: note.q3,
+      })),
+      llmAssignments: llmAssignments.map((assignment) => ({
         noteId: assignment.note_id,
         lineId: assignment.line_id,
       })),

@@ -57,6 +57,8 @@ model Transcripts {
   gcs_path                    String   @db.Text
   upload_time                 DateTime @default(now())
   llm_annotation              Boolean  @default(false)
+  llm_annotation_visibility_default      LLMAnnotationVisibilityAdmin @default(hidden)
+  llm_annotation_visibility_per_annotator Boolean @default(false)
   video_uploaded              Boolean  @default(false)
   video_id                    String?  @unique @db.Uuid
   annotation_file_name        String?   @db.Text

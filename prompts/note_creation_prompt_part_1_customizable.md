@@ -13,7 +13,7 @@ A moment is a short stretch of talk or action in which students:
 
 For each moment, provide:
 
-- A concise note title
+- A concise note title (1-2 words)
 
 Then address the following:
 

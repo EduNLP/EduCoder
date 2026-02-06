@@ -32,17 +32,20 @@ json["answer_3"]
 ### Output Requirements
 
 - Return valid JSON only
-- Each array element must be an exact transcript utterance
+- Output must be a JSON object with an `assignments` array
+- Each array element in `assignments` must be an exact transcript utterance
 
 
 ### Output Format
 
 ```json
-[
-  {
-    "line_number": "",
-    "speaker": "",
-    "utterance": ""
-  }
-]
+{
+  "assignments": [
+    {
+      "line_number": "",
+      "speaker": "",
+      "utterance": ""
+    }
+  ]
+}
 ```

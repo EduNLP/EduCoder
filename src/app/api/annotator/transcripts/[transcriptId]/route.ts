@@ -56,6 +56,8 @@ export async function GET(request: Request, context: RouteContext) {
       select: {
         id: true,
         annotation_completed: true,
+        llm_annotation_visibility_user: true,
+        llm_annotation_visibility_admin: true,
         transcript: {
           select: {
             id: true,
@@ -168,6 +170,8 @@ export async function GET(request: Request, context: RouteContext) {
         annotationId: annotation.id,
         status,
         annotationCompleted: annotation.annotation_completed,
+        llmAnnotationVisibilityUser: annotation.llm_annotation_visibility_user,
+        llmAnnotationVisibilityAdmin: annotation.llm_annotation_visibility_admin,
         lastUpdated:
           latestAssignment?.createdAt?.toISOString?.() ??
           null,

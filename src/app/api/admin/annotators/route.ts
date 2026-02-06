@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 
-import type { Prisma, Role, User } from '@prisma/client'
+import type { Prisma, Role, User, LLMAnnotationVisibilityAdmin } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 
@@ -218,7 +218,7 @@ const assignTranscriptsToAnnotator = async ({
 
   const transcripts = await prisma.transcripts.findMany({
     where: { id: { in: transcriptIds }, workspace_id: workspaceId },
-    select: { id: true },
+    select: { id: true, llm_annotation_visibility_default: true },
   })
 
   const transcriptMap = new Map(
@@ -229,11 +229,14 @@ const assignTranscriptsToAnnotator = async ({
     throw new Error('One or more selected transcripts could not be found.')
   }
 
-  const annotationRows: Prisma.AnnotationsCreateManyInput[] = transcripts.map((transcript) => ({
-    transcript_id: transcript.id,
-    created_for: annotatorId,
-    gcs_path: '',
-  }))
+  const annotationRows: Prisma.AnnotationsCreateManyInput[] = transcripts.map(
+    (transcript) => ({
+      transcript_id: transcript.id,
+      created_for: annotatorId,
+      gcs_path: '',
+      llm_annotation_visibility_admin: transcript.llm_annotation_visibility_default,
+    }),
+  )
 
   if (annotationRows.length > 0) {
     await prisma.annotations.createMany({ data: annotationRows })
@@ -251,10 +254,19 @@ const syncAnnotatorTranscriptAssignments = async ({
   annotatorId: string
   workspaceId: string
 }) => {
+  const transcriptDefaultsById = new Map<
+    string,
+    { id: string; llm_annotation_visibility_default: LLMAnnotationVisibilityAdmin }
+  >()
+
   if (transcriptIds.length > 0) {
     const transcripts = await prisma.transcripts.findMany({
       where: { id: { in: transcriptIds }, workspace_id: workspaceId },
-      select: { id: true },
+      select: { id: true, llm_annotation_visibility_default: true },
+    })
+
+    transcripts.forEach((transcript) => {
+      transcriptDefaultsById.set(transcript.id, transcript)
     })
 
     const transcriptSet = new Set(transcripts.map((transcript) => transcript.id))
@@ -316,11 +328,19 @@ const syncAnnotatorTranscriptAssignments = async ({
   if (toCreate.length > 0) {
     operations.push(
       prisma.annotations.createMany({
-        data: toCreate.map((transcriptId) => ({
-          transcript_id: transcriptId,
-          created_for: annotatorId,
-          gcs_path: '',
-        })),
+        data: toCreate.map((transcriptId) => {
+          const transcriptDefaults = transcriptDefaultsById.get(transcriptId)
+          if (!transcriptDefaults) {
+            throw new Error('One or more selected transcripts could not be found.')
+          }
+          return {
+            transcript_id: transcriptId,
+            created_for: annotatorId,
+            gcs_path: '',
+            llm_annotation_visibility_admin:
+              transcriptDefaults.llm_annotation_visibility_default,
+          }
+        }),
       }),
     )
   }

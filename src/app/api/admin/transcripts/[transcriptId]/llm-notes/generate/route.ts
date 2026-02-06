@@ -15,6 +15,11 @@ const NOTE_CREATION_PROMPT_PART_2_PATH = path.join(
   'prompts',
   'note_creation_prompt_part_2_static.md',
 )
+const NOTE_ASSIGNMENT_PROMPT_PART_2_PATH = path.join(
+  process.cwd(),
+  'prompts',
+  'note_assignment_prompt_part_2_static.md',
+)
 
 const noteArraySchema = {
   type: 'array',
@@ -40,6 +45,29 @@ const noteResponseSchema = {
   required: ['notes'],
 } as const
 
+const noteAssignmentArraySchema = {
+  type: 'array',
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      line_number: { type: 'integer' },
+      speaker: { type: 'string' },
+      utterance: { type: 'string' },
+    },
+    required: ['line_number', 'speaker', 'utterance'],
+  },
+} as const
+
+const noteAssignmentResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    assignments: noteAssignmentArraySchema,
+  },
+  required: ['assignments'],
+} as const
+
 type RouteContext = {
   params: Promise<{
     transcriptId?: string
@@ -48,12 +76,14 @@ type RouteContext = {
 
 type PromptSettingsRow = {
   note_creation_prompt: string
+  note_assignment_prompt: string
   annotate_all_lines: boolean
   range_start_line: number | null
   range_end_line: number | null
 }
 
-type TranscriptPromptLine = {
+type PromptSourceLine = {
+  line_id: string
   line_number: number
   speaker: string
   utterance: string
@@ -64,6 +94,25 @@ type GeneratedNote = {
   answer_1: string
   answer_2: string
   answer_3: string
+}
+
+type GeneratedNoteAssignment = {
+  line_number: number
+  speaker: string
+  utterance: string
+}
+
+type OpenAiJsonResponseRequest = {
+  openAiApiKey: string
+  input: string
+  schemaName: string
+  schema: unknown
+  requestFailureMessage: string
+}
+
+type WorkspaceUsageRow = {
+  llm_annotation_used: number
+  llm_annotation_limit: number
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -129,6 +178,47 @@ const getTextField = (record: Record<string, unknown>, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getPositiveIntegerField = (record: Record<string, unknown>, key: string) => {
+  const value = record[key]
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number.parseInt(trimmed, 10)
+      if (parsed > 0) {
+        return parsed
+      }
+    }
+  }
+
+  return null
+}
+
+const extractJsonCandidates = (outputText: string) => {
+  const candidates = [outputText]
+  const fencedJsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fencedJsonMatch?.[1]) {
+    candidates.push(fencedJsonMatch[1])
+  }
+
+  const firstArrayBracket = outputText.indexOf('[')
+  const lastArrayBracket = outputText.lastIndexOf(']')
+  if (firstArrayBracket >= 0 && lastArrayBracket > firstArrayBracket) {
+    candidates.push(outputText.slice(firstArrayBracket, lastArrayBracket + 1))
+  }
+
+  const firstObjectBracket = outputText.indexOf('{')
+  const lastObjectBracket = outputText.lastIndexOf('}')
+  if (firstObjectBracket >= 0 && lastObjectBracket > firstObjectBracket) {
+    candidates.push(outputText.slice(firstObjectBracket, lastObjectBracket + 1))
+  }
+
+  return candidates
+}
+
 const normalizeGeneratedNotes = (value: unknown): GeneratedNote[] | null => {
   const rawNotes = Array.isArray(value)
     ? value
@@ -167,25 +257,7 @@ const normalizeGeneratedNotes = (value: unknown): GeneratedNote[] | null => {
 }
 
 const parseGeneratedNotes = (outputText: string): GeneratedNote[] => {
-  const candidates = [outputText]
-  const fencedJsonMatch = outputText.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  if (fencedJsonMatch?.[1]) {
-    candidates.push(fencedJsonMatch[1])
-  }
-
-  const firstArrayBracket = outputText.indexOf('[')
-  const lastArrayBracket = outputText.lastIndexOf(']')
-  if (firstArrayBracket >= 0 && lastArrayBracket > firstArrayBracket) {
-    candidates.push(outputText.slice(firstArrayBracket, lastArrayBracket + 1))
-  }
-
-  const firstObjectBracket = outputText.indexOf('{')
-  const lastObjectBracket = outputText.lastIndexOf('}')
-  if (firstObjectBracket >= 0 && lastObjectBracket > firstObjectBracket) {
-    candidates.push(outputText.slice(firstObjectBracket, lastObjectBracket + 1))
-  }
-
-  for (const candidate of candidates) {
+  for (const candidate of extractJsonCandidates(outputText)) {
     const normalizedCandidate = candidate.trim()
     if (!normalizedCandidate) {
       continue
@@ -203,6 +275,154 @@ const parseGeneratedNotes = (outputText: string): GeneratedNote[] => {
   }
 
   throw new Error('OpenAI response could not be parsed as notes JSON.')
+}
+
+const normalizeGeneratedNoteAssignments = (
+  value: unknown,
+): GeneratedNoteAssignment[] | null => {
+  const rawAssignments = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.assignments)
+      ? value.assignments
+      : null
+
+  if (!rawAssignments) {
+    return null
+  }
+
+  const assignments: GeneratedNoteAssignment[] = []
+  for (const item of rawAssignments) {
+    if (!isRecord(item)) {
+      return null
+    }
+
+    const lineNumber =
+      getPositiveIntegerField(item, 'line_number') ??
+      getPositiveIntegerField(item, 'line')
+    if (lineNumber === null) {
+      return null
+    }
+
+    assignments.push({
+      line_number: lineNumber,
+      speaker: getTextField(item, 'speaker'),
+      utterance: getTextField(item, 'utterance'),
+    })
+  }
+
+  return assignments
+}
+
+const parseGeneratedNoteAssignments = (outputText: string): GeneratedNoteAssignment[] => {
+  for (const candidate of extractJsonCandidates(outputText)) {
+    const normalizedCandidate = candidate.trim()
+    if (!normalizedCandidate) {
+      continue
+    }
+
+    try {
+      const parsed = JSON.parse(normalizedCandidate)
+      const normalized = normalizeGeneratedNoteAssignments(parsed)
+      if (normalized) {
+        return normalized
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  throw new Error('OpenAI response could not be parsed as note assignments JSON.')
+}
+
+const buildPromptWithTranscript = (promptTemplate: string, transcriptJson: string) =>
+  promptTemplate.includes('<<transcript>>')
+    ? promptTemplate.split('<<transcript>>').join(transcriptJson)
+    : `${promptTemplate}\n\nTranscript:\n${transcriptJson}`
+
+const buildNoteAssignmentPrompt = ({
+  promptTemplate,
+  transcriptJson,
+  noteJson,
+}: {
+  promptTemplate: string
+  transcriptJson: string
+  noteJson: string
+}) => {
+  let prompt = promptTemplate
+  const hasTranscriptPlaceholder = prompt.includes('<<transcript>>')
+  const hasNotePlaceholder = prompt.includes('<<note>>')
+
+  if (hasTranscriptPlaceholder) {
+    prompt = prompt.split('<<transcript>>').join(transcriptJson)
+  }
+  if (hasNotePlaceholder) {
+    prompt = prompt.split('<<note>>').join(noteJson)
+  }
+
+  const sections = [prompt]
+  if (!hasTranscriptPlaceholder) {
+    sections.push(`Transcript:\n${transcriptJson}`)
+  }
+  if (!hasNotePlaceholder) {
+    sections.push(`Open Ended Note JSON:\n${noteJson}`)
+  }
+
+  return sections.filter(Boolean).join('\n\n')
+}
+
+const buildTranscriptLineMatchKey = (speaker: string, utterance: string) =>
+  `${speaker.trim().toLowerCase()}::${utterance.trim().toLowerCase()}`
+
+const requestOpenAiJsonOutput = async ({
+  openAiApiKey,
+  input,
+  schemaName,
+  schema,
+  requestFailureMessage,
+}: OpenAiJsonResponseRequest) => {
+  const openAiResponse = await fetch(OPENAI_RESPONSES_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${openAiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-5.2',
+      input,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: schemaName,
+          schema,
+          strict: true,
+        },
+      },
+    }),
+  })
+
+  const openAiPayload = (await openAiResponse.json().catch(() => null)) as unknown
+  if (!openAiResponse.ok) {
+    throw new Error(extractOpenAiErrorMessage(openAiPayload) ?? requestFailureMessage)
+  }
+
+  const outputText = extractOpenAiOutputText(openAiPayload)
+  if (!outputText) {
+    throw new Error('OpenAI returned an empty response.')
+  }
+
+  return outputText
+}
+
+const reserveWorkspaceLlmAnnotationUsage = async (workspaceId: string) => {
+  const rows = await prisma.$queryRaw<WorkspaceUsageRow[]>`
+    UPDATE "Workspaces"
+    SET "llm_annotation_used" = "llm_annotation_used" + 1
+    WHERE "id" = ${workspaceId}
+      AND "llm_annotation_used" < "llm_annotation_limit"
+    RETURNING "llm_annotation_used", "llm_annotation_limit"
+  `
+
+  return rows[0] ?? null
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -260,6 +480,7 @@ export async function POST(request: Request, context: RouteContext) {
     const promptRows = await prisma.$queryRaw<PromptSettingsRow[]>`
       SELECT
         "note_creation_prompt",
+        "note_assignment_prompt",
         "annotate_all_lines",
         "range_start_line",
         "range_end_line"
@@ -315,15 +536,17 @@ export async function POST(request: Request, context: RouteContext) {
       },
       orderBy: { line: 'asc' },
       select: {
+        line_id: true,
         line: true,
         speaker: true,
         utterance: true,
       },
     })
 
-    const promptLines: TranscriptPromptLine[] = transcriptLines
+    const promptLines: PromptSourceLine[] = transcriptLines
       .filter((line) => Boolean((line.utterance ?? '').trim()))
       .map((line) => ({
+        line_id: line.line_id,
         line_number: line.line,
         speaker: line.speaker?.trim() || 'Unknown speaker',
         utterance: line.utterance?.trim() ?? '',
@@ -365,72 +588,140 @@ export async function POST(request: Request, context: RouteContext) {
       )
     }
 
-    const staticPromptPart = await readFile(NOTE_CREATION_PROMPT_PART_2_PATH, 'utf8')
-    const transcriptJson = JSON.stringify(promptLines, null, 2)
-    const promptWithStaticPart = [
+    const [noteCreationStaticPromptPart, noteAssignmentStaticPromptPart] =
+      await Promise.all([
+        readFile(NOTE_CREATION_PROMPT_PART_2_PATH, 'utf8'),
+        readFile(NOTE_ASSIGNMENT_PROMPT_PART_2_PATH, 'utf8'),
+      ])
+
+    const usageReservation = await reserveWorkspaceLlmAnnotationUsage(actor.workspace_id)
+    if (!usageReservation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'LLM annotation limit reached for this workspace.',
+        },
+        { status: 429 },
+      )
+    }
+
+    const transcriptJson = JSON.stringify(
+      promptLines.map(({ line_number, speaker, utterance }) => ({
+        line_number,
+        speaker,
+        utterance,
+      })),
+      null,
+      2,
+    )
+
+    const noteCreationPromptTemplate = [
       promptSettings.note_creation_prompt.trim(),
-      staticPromptPart.trim(),
+      noteCreationStaticPromptPart.trim(),
     ]
       .filter(Boolean)
       .join('\n\n')
-    const finalPrompt = promptWithStaticPart.includes('<<transcript>>')
-      ? promptWithStaticPart.split('<<transcript>>').join(transcriptJson)
-      : `${promptWithStaticPart}\n\nTranscript:\n${transcriptJson}`
-
-    const openAiResponse = await fetch(OPENAI_RESPONSES_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-5.2',
-        input: finalPrompt,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'llm_generated_notes',
-            schema: noteResponseSchema,
-            strict: true,
-          },
-        },
-      }),
-    })
-
-    const openAiPayload = (await openAiResponse.json().catch(() => null)) as unknown
-    if (!openAiResponse.ok) {
-      const message =
-        extractOpenAiErrorMessage(openAiPayload) ??
-        'OpenAI request failed while generating notes.'
-      return NextResponse.json(
-        { success: false, error: message },
-        { status: 502 },
-      )
-    }
-
-    const outputText = extractOpenAiOutputText(openAiPayload)
-    if (!outputText) {
-      return NextResponse.json(
-        { success: false, error: 'OpenAI returned an empty response.' },
-        { status: 502 },
-      )
-    }
+    const noteCreationPrompt = buildPromptWithTranscript(
+      noteCreationPromptTemplate,
+      transcriptJson,
+    )
 
     let generatedNotes: GeneratedNote[]
     try {
+      const outputText = await requestOpenAiJsonOutput({
+        openAiApiKey,
+        input: noteCreationPrompt,
+        schemaName: 'llm_generated_notes',
+        schema: noteResponseSchema,
+        requestFailureMessage: 'OpenAI request failed while generating notes.',
+      })
       generatedNotes = parseGeneratedNotes(outputText)
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Failed to parse generated notes output.'
+          : 'Failed to generate notes output.'
       return NextResponse.json(
         { success: false, error: message },
         { status: 502 },
       )
     }
 
-    const notesCreated = await prisma.$transaction(async (tx) => {
+    const lineIdByLineNumber = new Map<number, string>()
+    const lineIdBySpeakerUtterance = new Map<string, string>()
+    promptLines.forEach((line) => {
+      if (!lineIdByLineNumber.has(line.line_number)) {
+        lineIdByLineNumber.set(line.line_number, line.line_id)
+      }
+
+      const key = buildTranscriptLineMatchKey(line.speaker, line.utterance)
+      if (key && !lineIdBySpeakerUtterance.has(key)) {
+        lineIdBySpeakerUtterance.set(key, line.line_id)
+      }
+    })
+
+    const noteAssignmentPromptTemplate = [
+      promptSettings.note_assignment_prompt.trim(),
+      noteAssignmentStaticPromptPart.trim(),
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+
+    let noteAssignmentLineIdsByNote: string[][]
+    try {
+      noteAssignmentLineIdsByNote = await Promise.all(
+        generatedNotes.map(async (note) => {
+          const noteJson = JSON.stringify(note, null, 2)
+          const noteAssignmentPrompt = buildNoteAssignmentPrompt({
+            promptTemplate: noteAssignmentPromptTemplate,
+            transcriptJson,
+            noteJson,
+          })
+
+          const outputText = await requestOpenAiJsonOutput({
+            openAiApiKey,
+            input: noteAssignmentPrompt,
+            schemaName: 'llm_generated_note_assignments',
+            schema: noteAssignmentResponseSchema,
+            requestFailureMessage:
+              'OpenAI request failed while generating note assignments.',
+          })
+
+          const generatedAssignments = parseGeneratedNoteAssignments(outputText)
+          return Array.from(
+            new Set(
+              generatedAssignments
+                .map((assignment) => {
+                  const lineIdFromLineNumber = lineIdByLineNumber.get(
+                    assignment.line_number,
+                  )
+                  if (lineIdFromLineNumber) {
+                    return lineIdFromLineNumber
+                  }
+
+                  const lineMatchKey = buildTranscriptLineMatchKey(
+                    assignment.speaker,
+                    assignment.utterance,
+                  )
+                  return lineIdBySpeakerUtterance.get(lineMatchKey)
+                })
+                .filter((lineId): lineId is string => Boolean(lineId)),
+            ),
+          )
+        }),
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to generate note assignments output.'
+      return NextResponse.json(
+        { success: false, error: message },
+        { status: 502 },
+      )
+    }
+
+    const { notesCreated, noteAssignmentsCreated } = await prisma.$transaction(async (tx) => {
       const maxNoteNumber = await tx.notes.aggregate({
         where: {
           transcript_id: transcriptId,
@@ -443,29 +734,57 @@ export async function POST(request: Request, context: RouteContext) {
 
       const nextNoteNumber = (maxNoteNumber._max.note_number ?? 0) + 1
       if (generatedNotes.length === 0) {
-        return 0
+        return {
+          notesCreated: 0,
+          noteAssignmentsCreated: 0,
+        }
       }
 
-      await tx.notes.createMany({
-        data: generatedNotes.map((note, index) => ({
-          transcript_id: transcriptId,
-          user_id: llmSystemUser.id,
-          note_number: nextNoteNumber + index,
-          title: note.title,
-          q1: note.answer_1,
-          q2: note.answer_2,
-          q3: note.answer_3,
-          source: 'llm',
-        })),
-      })
+      let noteAssignmentsCreated = 0
+      for (const [index, note] of generatedNotes.entries()) {
+        const createdNote = await tx.notes.create({
+          data: {
+            transcript_id: transcriptId,
+            user_id: llmSystemUser.id,
+            note_number: nextNoteNumber + index,
+            title: note.title,
+            q1: note.answer_1,
+            q2: note.answer_2,
+            q3: note.answer_3,
+            source: 'llm',
+          },
+          select: {
+            note_id: true,
+          },
+        })
 
-      return generatedNotes.length
+        const lineIds = noteAssignmentLineIdsByNote[index] ?? []
+        if (lineIds.length === 0) {
+          continue
+        }
+
+        const assignmentResult = await tx.noteAssignments.createMany({
+          data: lineIds.map((lineId) => ({
+            note_id: createdNote.note_id,
+            line_id: lineId,
+          })),
+          skipDuplicates: true,
+        })
+
+        noteAssignmentsCreated += assignmentResult.count
+      }
+
+      return {
+        notesCreated: generatedNotes.length,
+        noteAssignmentsCreated,
+      }
     })
 
     return NextResponse.json({
       success: true,
       transcriptId,
       notesCreated,
+      noteAssignmentsCreated,
     })
   } catch (error) {
     console.error('Failed to generate LLM notes', error)

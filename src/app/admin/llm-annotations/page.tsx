@@ -1,23 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Download,
   FileText,
   Search,
   Settings as SettingsIcon,
   Sparkles,
-  Paperclip,
   Eye,
+  Trash2,
   X,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react'
-import {
-  SPREADSHEET_ACCEPT,
-  SPREADSHEET_FILE_ERROR_MESSAGE,
-  validateTranscriptSpreadsheet,
-} from '@/utils/transcriptFileValidation'
+
+type LlmAnnotationVisibilityDefault = 'hidden' | 'visible_after_completion' | 'always_visible'
 
 type TranscriptRecord = {
   id: string
@@ -26,7 +21,11 @@ type TranscriptRecord = {
   transcript_file_name: string | null
   annotation_file_name: string | null
   llm_annotation: boolean
+  llm_annotation_visibility_default: LlmAnnotationVisibilityDefault
+  llm_annotation_visibility_per_annotator: boolean
   llm_annotation_gcs_path: string | null
+  has_llm_notes: boolean
+  assigned_users: AssignedAnnotator[]
 }
 
 type TranscriptPayload = {
@@ -36,7 +35,16 @@ type TranscriptPayload = {
   transcript_file_name?: string | null
   annotation_file_name?: string | null
   llm_annotation?: boolean
+  llm_annotation_visibility_default?: LlmAnnotationVisibilityDefault | null
+  llm_annotation_visibility_per_annotator?: boolean | null
   llm_annotation_gcs_path?: string | null
+  has_llm_notes?: boolean
+  assigned_users?: Array<{
+    id?: string
+    name?: string | null
+    username?: string | null
+    llm_annotation_visibility_admin?: LlmAnnotationVisibilityDefault | null
+  }>
 }
 
 type TranscriptsResponse = {
@@ -65,6 +73,20 @@ type GenerateLlmNotesResponse = {
   error?: string
 }
 
+type DeleteLlmNotesResponse = {
+  success: boolean
+  notesDeleted?: number
+  error?: string
+}
+
+type SaveVisibilityResponse = {
+  success: boolean
+  defaultVisibility?: LlmAnnotationVisibilityDefault
+  perAnnotator?: boolean
+  annotatorVisibility?: Record<string, LlmAnnotationVisibilityDefault>
+  error?: string
+}
+
 type LlmAnnotationSettings = {
   scope: 'all' | 'range'
   startLine: string
@@ -73,12 +95,14 @@ type LlmAnnotationSettings = {
   noteAssignmentPrompt: string
 }
 
-const SAMPLE_VISIBILITY_ANNOTATORS = [
-  { id: 'annotator-1', name: 'Jordan Lee', visibility: 'inherit' },
-  { id: 'annotator-2', name: 'Riley Chen', visibility: 'after' },
-  { id: 'annotator-3', name: 'Morgan Patel', visibility: 'never' },
-  { id: 'annotator-4', name: 'Taylor Nguyen', visibility: 'always' },
-]
+type AnnotatorVisibility = 'never' | 'after' | 'always'
+
+type AssignedAnnotator = {
+  id: string
+  name: string | null
+  username: string | null
+  llm_annotation_visibility_admin: LlmAnnotationVisibilityDefault | null
+}
 
 const DEFAULT_LLM_SETTINGS: LlmAnnotationSettings = {
   scope: 'all',
@@ -127,10 +151,123 @@ const parseFileNameFromContentDisposition = (header: string | null) => {
 
 const buildZipFileName = (title?: string) => {
   const safeBase =
-    title?.trim().replace(/[/\\]/g, '-').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase() ||
-    'transcript-files'
+    title
+      ?.trim()
+      .replace(/[/\\]/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9_.-]/g, '')
+      .toLowerCase() || 'transcript-files'
   return safeBase.endsWith('.zip') ? safeBase : `${safeBase}.zip`
 }
+
+const buildLlmNotesFileName = (title?: string) => {
+  const transcriptSegment =
+    title
+      ?.trim()
+      .replace(/[/\\]/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9_.-]/g, '')
+      .toLowerCase() || 'transcript'
+
+  const safeBase = `${transcriptSegment}-llm-notes`
+  return safeBase.endsWith('.xlsx') ? safeBase : `${safeBase}.xlsx`
+}
+
+const buildAnnotatorVisibilityState = (
+  annotators: AssignedAnnotator[],
+  fallbackVisibility: AnnotatorVisibility,
+  existing?: Record<string, AnnotatorVisibility>,
+): Record<string, AnnotatorVisibility> =>
+  annotators.reduce<Record<string, AnnotatorVisibility>>((acc, annotator) => {
+    acc[annotator.id] = existing?.[annotator.id] ?? fallbackVisibility
+    return acc
+  }, {})
+
+const mapDefaultVisibilityToUi = (
+  value?: LlmAnnotationVisibilityDefault | null,
+): AnnotatorVisibility => {
+  switch (value) {
+    case 'visible_after_completion':
+      return 'after'
+    case 'always_visible':
+      return 'always'
+    case 'hidden':
+    default:
+      return 'never'
+  }
+}
+
+const parseVisibilityDefault = (
+  value: unknown,
+): LlmAnnotationVisibilityDefault | null => {
+  if (value === 'hidden' || value === 'visible_after_completion' || value === 'always_visible') {
+    return value
+  }
+  return null
+}
+
+const mapUiVisibilityToDefault = (
+  value: AnnotatorVisibility,
+): LlmAnnotationVisibilityDefault => {
+  switch (value) {
+    case 'after':
+      return 'visible_after_completion'
+    case 'always':
+      return 'always_visible'
+    case 'never':
+    default:
+      return 'hidden'
+  }
+}
+
+const buildAnnotatorVisibilityOverrides = (
+  annotators: AssignedAnnotator[],
+): Record<string, AnnotatorVisibility> =>
+  annotators.reduce<Record<string, AnnotatorVisibility>>((acc, annotator) => {
+    if (annotator.llm_annotation_visibility_admin) {
+      acc[annotator.id] = mapDefaultVisibilityToUi(
+        annotator.llm_annotation_visibility_admin,
+      )
+    }
+    return acc
+  }, {})
+
+const mergeAnnotatorVisibility = (
+  annotators: AssignedAnnotator[],
+  overrides?: Record<string, LlmAnnotationVisibilityDefault> | null,
+): AssignedAnnotator[] => {
+  if (!overrides) {
+    return annotators
+  }
+
+  return annotators.map((annotator) => ({
+    ...annotator,
+    llm_annotation_visibility_admin:
+      overrides[annotator.id] ?? annotator.llm_annotation_visibility_admin,
+  }))
+}
+
+const normalizeAssignedUsers = (
+  users?: TranscriptPayload['assigned_users'] | null,
+): AssignedAnnotator[] => {
+  if (!Array.isArray(users)) {
+    return []
+  }
+
+  return users
+    .map((user) => ({
+      id: typeof user.id === 'string' ? user.id : '',
+      name: typeof user.name === 'string' ? user.name.trim() || null : null,
+      username: typeof user.username === 'string' ? user.username.trim() || null : null,
+      llm_annotation_visibility_admin: parseVisibilityDefault(
+        user.llm_annotation_visibility_admin,
+      ),
+    }))
+    .filter((user) => user.id)
+}
+
+const getAnnotatorLabel = (annotator: AssignedAnnotator) =>
+  annotator.name?.trim() || annotator.username?.trim() || 'Unnamed user'
 
 export default function LlmAnnotationsPage() {
   const [transcripts, setTranscripts] = useState<TranscriptRecord[]>([])
@@ -139,21 +276,23 @@ export default function LlmAnnotationsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [generatingTranscriptIds, setGeneratingTranscriptIds] = useState<Set<string>>(() => new Set())
   const [generateError, setGenerateError] = useState<{ transcriptId: string; message: string } | null>(null)
-  const [generatedTranscriptIds, setGeneratedTranscriptIds] = useState<Set<string>>(() => new Set())
   const [downloadingTranscriptId, setDownloadingTranscriptId] = useState<string | null>(null)
   const [downloadError, setDownloadError] = useState<{ transcriptId: string; message: string } | null>(null)
-  const [attachingTranscriptId, setAttachingTranscriptId] = useState<string | null>(null)
-  const [attachError, setAttachError] = useState<{ transcriptId: string; message: string } | null>(null)
+  const [deletingTranscriptIds, setDeletingTranscriptIds] = useState<Set<string>>(() => new Set())
+  const [deleteError, setDeleteError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [settingsTranscript, setSettingsTranscript] = useState<TranscriptRecord | null>(null)
   const [visibilityTranscript, setVisibilityTranscript] = useState<TranscriptRecord | null>(null)
-  const [defaultVisibility, setDefaultVisibility] = useState<'never' | 'after' | 'always'>('always')
+  const [defaultVisibility, setDefaultVisibility] = useState<AnnotatorVisibility>('never')
   const [showAnnotatorOverrides, setShowAnnotatorOverrides] = useState(false)
+  const [annotatorVisibility, setAnnotatorVisibility] = useState<Record<string, AnnotatorVisibility>>({})
   const [llmSettingsByTranscriptId, setLlmSettingsByTranscriptId] = useState<
     Record<string, LlmAnnotationSettings>
   >({})
   const [isSettingsLoading, setIsSettingsLoading] = useState(false)
   const [isSettingsSaving, setIsSettingsSaving] = useState(false)
   const [settingsErrorMessage, setSettingsErrorMessage] = useState<string | null>(null)
+  const [isVisibilitySaving, setIsVisibilitySaving] = useState(false)
+  const [visibilityErrorMessage, setVisibilityErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let isCancelled = false
@@ -183,7 +322,14 @@ export default function LlmAnnotationsPage() {
           transcript_file_name: transcript.transcript_file_name ?? null,
           annotation_file_name: transcript.annotation_file_name ?? null,
           llm_annotation: Boolean(transcript.llm_annotation),
+          llm_annotation_visibility_default:
+            transcript.llm_annotation_visibility_default ?? 'hidden',
+          llm_annotation_visibility_per_annotator: Boolean(
+            transcript.llm_annotation_visibility_per_annotator,
+          ),
           llm_annotation_gcs_path: transcript.llm_annotation_gcs_path ?? null,
+          has_llm_notes: Boolean(transcript.has_llm_notes),
+          assigned_users: normalizeAssignedUsers(transcript.assigned_users),
         }))
         setTranscripts(normalized)
       } catch (error) {
@@ -305,11 +451,16 @@ export default function LlmAnnotationsPage() {
         throw new Error(message)
       }
 
-      setGeneratedTranscriptIds((current) => {
-        const next = new Set(current)
-        next.add(transcriptId)
-        return next
-      })
+      setTranscripts((current) =>
+        current.map((transcript) =>
+          transcript.id === transcriptId
+            ? {
+                ...transcript,
+                has_llm_notes: true,
+              }
+            : transcript,
+        ),
+      )
     } catch (error) {
       console.error('Failed to generate LLM notes', error)
       setGenerateError({
@@ -331,8 +482,12 @@ export default function LlmAnnotationsPage() {
 
     try {
       const transcript = transcripts.find((item) => item.id === transcriptId)
+      const hasGeneratedNotes = Boolean(transcript?.has_llm_notes)
+      const endpoint = hasGeneratedNotes
+        ? `/api/admin/transcripts/${transcriptId}/llm-notes/download?transcriptId=${encodeURIComponent(transcriptId)}`
+        : `/api/admin/transcripts/${transcriptId}/download?transcriptId=${encodeURIComponent(transcriptId)}`
       const response = await fetch(
-        `/api/admin/transcripts/${transcriptId}/download?transcriptId=${encodeURIComponent(transcriptId)}`,
+        endpoint,
       )
 
       if (!response.ok) {
@@ -340,7 +495,7 @@ export default function LlmAnnotationsPage() {
         const message =
           typeof payload?.error === 'string'
             ? payload.error
-            : 'Failed to generate download link.'
+            : 'Failed to download LLM notes.'
         throw new Error(message)
       }
 
@@ -348,7 +503,9 @@ export default function LlmAnnotationsPage() {
       const contentDisposition = response.headers.get('content-disposition')
       const suggestedName =
         parseFileNameFromContentDisposition(contentDisposition) ??
-        buildZipFileName(transcript?.title)
+        (hasGeneratedNotes
+          ? buildLlmNotesFileName(transcript?.title)
+          : buildZipFileName(transcript?.title))
 
       const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -363,81 +520,67 @@ export default function LlmAnnotationsPage() {
       console.error('Failed to download LLM annotations', error)
       setDownloadError({
         transcriptId,
-        message: error instanceof Error ? error.message : 'Failed to download LLM annotations.',
+        message: error instanceof Error ? error.message : 'Failed to download LLM notes.',
       })
     } finally {
       setDownloadingTranscriptId(null)
     }
   }
 
-  const handleAttachFile = async (transcriptId: string, event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target
-    const file = input.files?.[0]
-    if (!file) {
+  const handleDeleteGeneratedNotes = async (transcript: TranscriptRecord) => {
+    if (deletingTranscriptIds.has(transcript.id)) {
       return
     }
 
-    setAttachError(null)
-
-    const validation = await validateTranscriptSpreadsheet(file)
-    if (!validation.isValid) {
-      setAttachError({
-        transcriptId,
-        message: validation.error ?? SPREADSHEET_FILE_ERROR_MESSAGE,
-      })
-      input.value = ''
+    const confirmed = window.confirm(
+      `Delete generated LLM notes for "${transcript.title}"? This removes all LLM notes and note assignments for this transcript.`,
+    )
+    if (!confirmed) {
       return
     }
 
-    setAttachingTranscriptId(transcriptId)
+    setDeleteError(null)
+    setDeletingTranscriptIds((current) => {
+      const next = new Set(current)
+      next.add(transcript.id)
+      return next
+    })
 
     try {
-      const formData = new FormData()
-      formData.append('transcriptId', transcriptId)
-      formData.append('associatedFile', file)
-
-      const response = await fetch(`/api/admin/transcripts/${transcriptId}/associated`, {
-        method: 'POST',
-        body: formData,
+      const response = await fetch(`/api/admin/transcripts/${transcript.id}/llm-notes`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcriptId: transcript.id }),
       })
-      const payload = await response.json().catch(() => ({}))
+      const payload: DeleteLlmNotesResponse | null = await response.json().catch(() => null)
 
-      if (!response.ok || payload?.success === false) {
-        const message =
-          typeof payload?.error === 'string'
-            ? payload.error
-            : 'Failed to attach generated file.'
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Failed to delete LLM notes.'
         throw new Error(message)
       }
 
-      const annotationFileName =
-        typeof payload?.annotation_file_name === 'string' && payload.annotation_file_name
-          ? payload.annotation_file_name
-          : file.name
-
-      setTranscripts((previous) =>
-        previous.map((transcript) =>
-          transcript.id === transcriptId
+      setTranscripts((current) =>
+        current.map((item) =>
+          item.id === transcript.id
             ? {
-                ...transcript,
-                annotation_file_name: annotationFileName,
-                llm_annotation: true,
-                llm_annotation_gcs_path:
-                  typeof payload?.llm_annotation_gcs_path === 'string'
-                    ? payload.llm_annotation_gcs_path
-                    : transcript.llm_annotation_gcs_path,
+                ...item,
+                has_llm_notes: false,
               }
-            : transcript,
+            : item,
         ),
       )
     } catch (error) {
-      console.error('Failed to attach LLM annotation', error)
-      const message =
-        error instanceof Error ? error.message : 'Failed to attach generated file.'
-      setAttachError({ transcriptId, message })
+      console.error('Failed to delete LLM notes', error)
+      setDeleteError({
+        transcriptId: transcript.id,
+        message: error instanceof Error ? error.message : 'Failed to delete LLM notes.',
+      })
     } finally {
-      setAttachingTranscriptId(null)
-      input.value = ''
+      setDeletingTranscriptIds((current) => {
+        const next = new Set(current)
+        next.delete(transcript.id)
+        return next
+      })
     }
   }
 
@@ -516,13 +659,163 @@ export default function LlmAnnotationsPage() {
   }
 
   const openVisibilityModal = (transcript: TranscriptRecord) => {
+    const nextDefaultVisibility = mapDefaultVisibilityToUi(
+      transcript.llm_annotation_visibility_default,
+    )
+    const existingOverrides = buildAnnotatorVisibilityOverrides(transcript.assigned_users)
     setVisibilityTranscript(transcript)
-    setShowAnnotatorOverrides(false)
+    setDefaultVisibility(nextDefaultVisibility)
+    setShowAnnotatorOverrides(transcript.llm_annotation_visibility_per_annotator)
+    setAnnotatorVisibility(
+      buildAnnotatorVisibilityState(
+        transcript.assigned_users,
+        nextDefaultVisibility,
+        existingOverrides,
+      ),
+    )
+    setVisibilityErrorMessage(null)
   }
 
   const closeVisibilityModal = () => {
     setVisibilityTranscript(null)
     setShowAnnotatorOverrides(false)
+    setVisibilityErrorMessage(null)
+  }
+
+  const handleAnnotatorVisibilityChange = (
+    annotatorId: string,
+    visibility: AnnotatorVisibility,
+  ) => {
+    setAnnotatorVisibility((previous) => ({
+      ...previous,
+      [annotatorId]: visibility,
+    }))
+  }
+
+  const handleToggleAnnotatorOverrides = () => {
+    setShowAnnotatorOverrides((current) => {
+      const next = !current
+      if (next && visibilityTranscript) {
+        setAnnotatorVisibility((previous) =>
+          buildAnnotatorVisibilityState(
+            visibilityTranscript.assigned_users,
+            defaultVisibility,
+            previous,
+          ),
+        )
+      }
+      return next
+    })
+  }
+
+  const handleSelectVisibilityColumn = (visibility: AnnotatorVisibility) => {
+    if (!visibilityTranscript) {
+      return
+    }
+
+    setAnnotatorVisibility(() => {
+      const next: Record<string, AnnotatorVisibility> = {}
+      visibilityTranscript.assigned_users.forEach((annotator) => {
+        next[annotator.id] = visibility
+      })
+      return next
+    })
+  }
+
+  const handleSaveVisibility = async () => {
+    if (!visibilityTranscript || isVisibilitySaving) {
+      return
+    }
+
+    setIsVisibilitySaving(true)
+    setVisibilityErrorMessage(null)
+
+    try {
+      const annotatorVisibilityPayload = showAnnotatorOverrides
+        ? Object.fromEntries(
+            Object.entries(annotatorVisibility).map(([annotatorId, visibility]) => [
+              annotatorId,
+              mapUiVisibilityToDefault(visibility),
+            ]),
+          )
+        : undefined
+      const response = await fetch(
+        `/api/admin/transcripts/${visibilityTranscript.id}/llm-annotation-visibility`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            defaultVisibility: mapUiVisibilityToDefault(defaultVisibility),
+            perAnnotator: showAnnotatorOverrides,
+            annotatorVisibility: annotatorVisibilityPayload,
+          }),
+        },
+      )
+      const payload: SaveVisibilityResponse | null = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Failed to save LLM annotation visibility.'
+        throw new Error(message)
+      }
+
+      const updatedVisibility =
+        payload.defaultVisibility ?? mapUiVisibilityToDefault(defaultVisibility)
+      const updatedPerAnnotator =
+        typeof payload.perAnnotator === 'boolean'
+          ? payload.perAnnotator
+          : showAnnotatorOverrides
+      let updatedAnnotatorVisibility =
+        payload.annotatorVisibility ?? annotatorVisibilityPayload ?? null
+
+      if (!updatedPerAnnotator && visibilityTranscript) {
+        updatedAnnotatorVisibility = visibilityTranscript.assigned_users.reduce<
+          Record<string, LlmAnnotationVisibilityDefault>
+        >((acc, annotator) => {
+          acc[annotator.id] = updatedVisibility
+          return acc
+        }, {})
+      }
+
+      setTranscripts((current) =>
+        current.map((transcript) =>
+          transcript.id === visibilityTranscript.id
+            ? {
+                ...transcript,
+                llm_annotation_visibility_default: updatedVisibility,
+                llm_annotation_visibility_per_annotator: updatedPerAnnotator,
+                assigned_users: mergeAnnotatorVisibility(
+                  transcript.assigned_users,
+                  updatedAnnotatorVisibility,
+                ),
+              }
+            : transcript,
+        ),
+      )
+      setVisibilityTranscript((current) =>
+        current
+          ? {
+              ...current,
+              llm_annotation_visibility_default: updatedVisibility,
+              llm_annotation_visibility_per_annotator: updatedPerAnnotator,
+              assigned_users: mergeAnnotatorVisibility(
+                current.assigned_users,
+                updatedAnnotatorVisibility,
+              ),
+            }
+          : current,
+      )
+      setDefaultVisibility(mapDefaultVisibilityToUi(updatedVisibility))
+      closeVisibilityModal()
+    } catch (error) {
+      console.error('Failed to save LLM annotation visibility', error)
+      setVisibilityErrorMessage(
+        error instanceof Error ? error.message : 'Failed to save LLM annotation visibility.',
+      )
+    } finally {
+      setIsVisibilitySaving(false)
+    }
   }
 
   const activeSettings =
@@ -574,17 +867,18 @@ export default function LlmAnnotationsPage() {
           const hasAttachment = Boolean(
             transcript.llm_annotation_gcs_path || transcript.annotation_file_name || transcript.llm_annotation,
           )
-          const hasGeneratedNotes = generatedTranscriptIds.has(transcript.id)
+          const hasGeneratedNotes = transcript.has_llm_notes
           const isGenerating = generatingTranscriptIds.has(transcript.id)
           const isGenerated = hasAttachment || hasGeneratedNotes
+          const canDownload = hasAttachment || hasGeneratedNotes
           const isDownloading = downloadingTranscriptId === transcript.id
-          const isAttaching = attachingTranscriptId === transcript.id
-          const attachErrorMessage =
-            attachError?.transcriptId === transcript.id ? attachError.message : null
+          const isDeleting = deletingTranscriptIds.has(transcript.id)
           const downloadErrorMessage =
             downloadError?.transcriptId === transcript.id ? downloadError.message : null
           const generateErrorMessage =
             generateError?.transcriptId === transcript.id ? generateError.message : null
+          const deleteErrorMessage =
+            deleteError?.transcriptId === transcript.id ? deleteError.message : null
 
           return (
             <div
@@ -653,58 +947,28 @@ export default function LlmAnnotationsPage() {
                     <span className="text-sm font-medium">Settings</span>
                   </button>
 
-                  <button
-                    onClick={() => void handleGenerate(transcript.id)}
-                    className={`flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors ${
-                      isGenerating ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
-                    disabled={isGenerating}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span className="text-sm font-medium">
-                      {isGenerating ? 'Generating...' : 'Generate LLM Annotations'}
-                    </span>
-                  </button>
-
-                </div>
-
-                {isGenerated && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  {isGenerated && (
                     <button
                       onClick={() => handleDownload(transcript.id)}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        hasAttachment
+                        canDownload
                           ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                           : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       } ${isDownloading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                      disabled={isDownloading || !hasAttachment}
+                      disabled={isDownloading || !canDownload}
                     >
                       <Download className="w-4 h-4" />
                       <span className="text-sm font-medium">
-                        {isDownloading ? 'Downloading...' : 'Download'}
+                        {isDownloading
+                          ? 'Downloading...'
+                          : hasGeneratedNotes
+                            ? 'Download LLM Notes'
+                            : 'Download'}
                       </span>
                     </button>
-                    <div>
-                      <input
-                        type="file"
-                        id={`replace-llm-${transcript.id}`}
-                        className="hidden"
-                        accept={SPREADSHEET_ACCEPT}
-                        onChange={(event) => handleAttachFile(transcript.id, event)}
-                        disabled={isAttaching}
-                      />
-                      <label
-                        htmlFor={`replace-llm-${transcript.id}`}
-                        className={`inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer ${
-                          isAttaching ? 'opacity-70 pointer-events-none' : ''
-                        }`}
-                      >
-                        <Paperclip className="w-4 h-4" />
-                        <span className="text-sm font-medium">
-                          {isAttaching ? 'Replacing...' : 'Replace'}
-                        </span>
-                      </label>
-                    </div>
+                  )}
+
+                  {isGenerated && (
                     <button
                       onClick={() => openVisibilityModal(transcript)}
                       className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
@@ -712,8 +976,41 @@ export default function LlmAnnotationsPage() {
                       <Eye className="w-4 h-4" />
                       <span className="text-sm font-medium">Annotation Visibility</span>
                     </button>
-                  </div>
-                )}
+                  )}
+
+                  {isGenerated && hasGeneratedNotes && (
+                    <button
+                      onClick={() => void handleDeleteGeneratedNotes(transcript)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        isDeleting
+                          ? 'bg-red-50 text-red-400 cursor-not-allowed'
+                          : 'bg-red-50 text-red-700 hover:bg-red-100'
+                      }`}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span className="text-sm font-medium">
+                        {isDeleting ? 'Deleting...' : 'Delete LLM Notes'}
+                      </span>
+                    </button>
+                  )}
+
+                  {!isGenerated && (
+                    <button
+                      onClick={() => void handleGenerate(transcript.id)}
+                      className={`flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors ${
+                        isGenerating ? 'opacity-70 cursor-not-allowed' : ''
+                      }`}
+                      disabled={isGenerating}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span className="text-sm font-medium">
+                        {isGenerating ? 'Generating...' : 'Generate LLM Annotations'}
+                      </span>
+                    </button>
+                  )}
+
+                </div>
 
                 {generateErrorMessage && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -723,8 +1020,8 @@ export default function LlmAnnotationsPage() {
                 {downloadErrorMessage && (
                   <p className="text-xs text-red-600">{downloadErrorMessage}</p>
                 )}
-                {attachErrorMessage && (
-                  <p className="text-xs text-red-600">{attachErrorMessage}</p>
+                {deleteErrorMessage && (
+                  <p className="text-xs text-red-600">{deleteErrorMessage}</p>
                 )}
               </div>
             </div>
@@ -772,7 +1069,11 @@ export default function LlmAnnotationsPage() {
 
               <div className="p-6">
                 <div className="space-y-5">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div
+                    className={`rounded-lg border border-gray-200 bg-gray-50 p-4 ${
+                      showAnnotatorOverrides ? 'opacity-60' : ''
+                    }`}
+                  >
                     <p className="text-sm font-semibold text-gray-900">
                       LLM Annotation Visibility (Default)
                     </p>
@@ -783,6 +1084,7 @@ export default function LlmAnnotationsPage() {
                           name="llm-visibility-default"
                           checked={defaultVisibility === 'never'}
                           onChange={() => setDefaultVisibility('never')}
+                          disabled={showAnnotatorOverrides}
                           className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                         />
                         Hidden
@@ -793,6 +1095,7 @@ export default function LlmAnnotationsPage() {
                           name="llm-visibility-default"
                           checked={defaultVisibility === 'after'}
                           onChange={() => setDefaultVisibility('after')}
+                          disabled={showAnnotatorOverrides}
                           className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                         />
                         Visible after completion
@@ -803,100 +1106,158 @@ export default function LlmAnnotationsPage() {
                           name="llm-visibility-default"
                           checked={defaultVisibility === 'always'}
                           onChange={() => setDefaultVisibility('always')}
+                          disabled={showAnnotatorOverrides}
                           className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                         />
                         Always visible
                       </label>
                     </div>
                     <p className="text-xs text-gray-500 mt-3">
-                      This setting applies to all annotators unless overridden.
+                      {showAnnotatorOverrides
+                        ? 'Per-annotator settings are enabled'
+                        : 'Applies to all annotators'}
                     </p>
                   </div>
-
-                  <div className="flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setShowAnnotatorOverrides((current) => !current)}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                      aria-expanded={showAnnotatorOverrides}
-                      aria-controls="annotator-visibility-grid"
-                    >
-                      <span>Customize per annotator</span>
-                      {showAnnotatorOverrides ? (
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-
-                  {showAnnotatorOverrides && (
-                    <div
-                      id="annotator-visibility-grid"
-                      className="overflow-x-auto rounded-lg border border-gray-200"
-                    >
-                      <table className="min-w-full text-sm text-gray-700">
-                        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-semibold">Annotator</th>
-                            <th className="px-4 py-3 text-center font-semibold">Inherit default</th>
-                            <th className="px-4 py-3 text-center font-semibold">Hidden</th>
-                            <th className="px-4 py-3 text-center font-semibold">
-                              Visible after completion
-                            </th>
-                            <th className="px-4 py-3 text-center font-semibold">
-                              Always visible
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {SAMPLE_VISIBILITY_ANNOTATORS.map((annotator) => (
-                            <tr key={annotator.id} className="bg-white">
-                              <td className="px-4 py-4 font-medium text-gray-900">
-                                {annotator.name}
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <input
-                                  type="radio"
-                                  name={`visibility-${annotator.id}`}
-                                  defaultChecked={annotator.visibility === 'inherit'}
-                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                                  aria-label={`Use default visibility for ${annotator.name}`}
-                                />
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <input
-                                  type="radio"
-                                  name={`visibility-${annotator.id}`}
-                                  defaultChecked={annotator.visibility === 'never'}
-                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                                  aria-label={`Hide LLM annotations for ${annotator.name}`}
-                                />
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <input
-                                  type="radio"
-                                  name={`visibility-${annotator.id}`}
-                                  defaultChecked={annotator.visibility === 'after'}
-                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                                  aria-label={`Show LLM annotations after completion for ${annotator.name}`}
-                                />
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <input
-                                  type="radio"
-                                  name={`visibility-${annotator.id}`}
-                                  defaultChecked={annotator.visibility === 'always'}
-                                  className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                                  aria-label={`Always show LLM annotations for ${annotator.name}`}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  {visibilityErrorMessage && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {visibilityErrorMessage}
                     </div>
                   )}
+
+                  <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Customize per annotator</p>
+                      <p className="text-xs text-gray-500">
+                        Allow different visibility settings for each annotator.
+                      </p>
+                    </div>
+                    <label className="inline-flex items-center gap-3 text-sm font-medium text-gray-600">
+                      <span>{showAnnotatorOverrides ? 'On' : 'Off'}</span>
+                      <span className="relative inline-flex h-6 w-11 items-center">
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          className="peer sr-only"
+                          checked={showAnnotatorOverrides}
+                          onChange={handleToggleAnnotatorOverrides}
+                          aria-controls="annotator-visibility-grid"
+                          aria-label="Customize per annotator visibility"
+                        />
+                        <span className="absolute inset-0 rounded-full bg-gray-200 transition-colors peer-checked:bg-primary-600" />
+                        <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+                      </span>
+                    </label>
+                  </div>
+
+                  {showAnnotatorOverrides &&
+                    (visibilityTranscript?.assigned_users.length ? (
+                      <div
+                        id="annotator-visibility-grid"
+                        className="overflow-x-auto rounded-lg border border-gray-200"
+                      >
+                        <table className="min-w-full text-sm text-gray-700">
+                          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                            <tr>
+                              <th className="px-4 py-3 text-left font-semibold">Annotator</th>
+                              <th className="px-4 py-3 text-center font-semibold">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span>Hidden</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectVisibilityColumn('never')}
+                                    className="text-[11px] font-semibold text-gray-400 hover:text-gray-500"
+                                    aria-label="Set all annotators to hidden"
+                                  >
+                                    Select all
+                                  </button>
+                                </div>
+                              </th>
+                              <th className="px-4 py-3 text-center font-semibold">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span>Visible after completion</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectVisibilityColumn('after')}
+                                    className="text-[11px] font-semibold text-gray-400 hover:text-gray-500"
+                                    aria-label="Set all annotators to visible after completion"
+                                  >
+                                    Select all
+                                  </button>
+                                </div>
+                              </th>
+                              <th className="px-4 py-3 text-center font-semibold">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span>Always visible</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectVisibilityColumn('always')}
+                                    className="text-[11px] font-semibold text-gray-400 hover:text-gray-500"
+                                    aria-label="Set all annotators to always visible"
+                                  >
+                                    Select all
+                                  </button>
+                                </div>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {(visibilityTranscript?.assigned_users ?? []).map((annotator) => {
+                              const annotatorLabel = getAnnotatorLabel(annotator)
+                              const currentVisibility =
+                                annotatorVisibility[annotator.id] ?? defaultVisibility
+
+                              return (
+                                <tr key={annotator.id} className="bg-white">
+                                  <td className="px-4 py-4 font-medium text-gray-900">
+                                    {annotatorLabel}
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <input
+                                      type="radio"
+                                      name={`visibility-${annotator.id}`}
+                                      checked={currentVisibility === 'never'}
+                                      onChange={() =>
+                                        handleAnnotatorVisibilityChange(annotator.id, 'never')
+                                      }
+                                      className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                      aria-label={`Hide LLM annotations for ${annotatorLabel}`}
+                                    />
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <input
+                                      type="radio"
+                                      name={`visibility-${annotator.id}`}
+                                      checked={currentVisibility === 'after'}
+                                      onChange={() =>
+                                        handleAnnotatorVisibilityChange(annotator.id, 'after')
+                                      }
+                                      className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                      aria-label={`Show LLM annotations after completion for ${annotatorLabel}`}
+                                    />
+                                  </td>
+                                  <td className="px-4 py-4 text-center">
+                                    <input
+                                      type="radio"
+                                      name={`visibility-${annotator.id}`}
+                                      checked={currentVisibility === 'always'}
+                                      onChange={() =>
+                                        handleAnnotatorVisibilityChange(annotator.id, 'always')
+                                      }
+                                      className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                                      aria-label={`Always show LLM annotations for ${annotatorLabel}`}
+                                    />
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        No annotators are assigned to this transcript yet.
+                      </div>
+                    ))}
                 </div>
               </div>
 
@@ -908,10 +1269,13 @@ export default function LlmAnnotationsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={closeVisibilityModal}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                  onClick={() => void handleSaveVisibility()}
+                  disabled={isVisibilitySaving}
+                  className={`px-4 py-2 bg-primary-600 text-white rounded-lg transition-colors ${
+                    isVisibilitySaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-700'
+                  }`}
                 >
-                  Save changes
+                  {isVisibilitySaving ? 'Saving...' : 'Save changes'}
                 </button>
               </div>
             </div>

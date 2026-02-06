@@ -56,6 +56,11 @@ type TranscriptSegment = {
 
 type AnnotationStatus = 'not_started' | 'in_progress' | 'completed'
 
+type LlmAnnotationVisibilityAdmin =
+  | 'hidden'
+  | 'visible_after_completion'
+  | 'always_visible'
+
 type TranscriptMeta = {
   id: string
   title: string
@@ -64,6 +69,8 @@ type TranscriptMeta = {
   annotationId: string
   status: AnnotationStatus
   annotationCompleted: boolean
+  llmAnnotationVisibilityUser: boolean
+  llmAnnotationVisibilityAdmin: LlmAnnotationVisibilityAdmin
   lastUpdated: string | null
 }
 
@@ -141,6 +148,8 @@ type NoteListResponse = {
   success: boolean
   notes?: NoteRecord[]
   assignments?: NoteAssignmentRecord[]
+  llmNotes?: NoteRecord[]
+  llmAssignments?: NoteAssignmentRecord[]
   error?: string
 }
 
@@ -240,56 +249,14 @@ const NOTE_DETAILS_FIELD_CONFIG = [
     noteKey: 'q3',
   },
 ] as const
-
-const STATIC_ASSIGN_NOTES = [
-  {
-    id: 'static-note-1',
-    title: 'Teacher',
-    q1: 'Teacher asks for what stays the same with scaling.',
-    q2: 'This prompt is an instructional move to surface structure.',
-    q3: 'Students are likely to connect invariants to multiplicative reasoning.',
-  },
-  {
-    id: 'static-note-2',
-    title: 'Misconception',
-    q1: 'Student mentions doubling without explaining why it works.',
-    q2: 'The response skips justification and may reflect pattern matching.',
-    q3: 'Student understanding may be fragile without structural reasoning.',
-  },
-  {
-    id: 'static-note-3',
-    title: 'Inference',
-    q1: 'Student introduces a ratio table to justify the pattern.',
-    q2: 'The strategy links representations to build a general rule.',
-    q3: 'Evidence suggests readiness to generalize proportional relationships.',
-  },
-] as const
-
-const STATIC_ASSIGN_LINE_NUMBERS = new Set([1, 2, 4, 6, 8, 10, 12, 13, 14])
-
-const STATIC_ASSIGN_NOTE_LOOKUP = STATIC_ASSIGN_NOTES.reduce(
-  (acc, note) => {
-    acc[note.id] = note
-    return acc
-  },
-  {} as Record<string, (typeof STATIC_ASSIGN_NOTES)[number]>,
-)
-
-const createStaticNoteAssignments = (rows: TranscriptRow[]) => {
-  if (rows.length === 0) return {}
-  return rows.reduce((acc, row) => {
-    const lineNumber = Number(row.line)
-    if (!Number.isFinite(lineNumber) || !STATIC_ASSIGN_LINE_NUMBERS.has(lineNumber)) {
-      return acc
+const createAssignmentListLookup = (assignments: NoteAssignmentRecord[]) =>
+  assignments.reduce((acc, assignment) => {
+    if (!acc[assignment.lineId]) {
+      acc[assignment.lineId] = []
     }
-    const randomIndex = Math.floor(Math.random() * STATIC_ASSIGN_NOTES.length)
-    const noteId = STATIC_ASSIGN_NOTES[randomIndex]?.id
-    if (noteId) {
-      acc[row.id] = [noteId]
-    }
+    acc[assignment.lineId].push(assignment.noteId)
     return acc
   }, {} as Record<string, string[]>)
-}
 
 const createNoteContentFields = (note?: {
   q1?: string
@@ -326,6 +293,12 @@ const createNoteDetailsDrafts = (noteBadges: NoteBadge[]) =>
 
 const createExpandedNotes = (noteBadges: NoteBadge[]) =>
   noteBadges.reduce((acc, note) => {
+    acc[note.id] = false
+    return acc
+  }, {} as Record<string, boolean>)
+
+const createExpandedLlmNotes = (notes: NoteRecord[]) =>
+  notes.reduce((acc, note) => {
     acc[note.id] = false
     return acc
   }, {} as Record<string, boolean>)
@@ -543,15 +516,16 @@ function AnnotationPageContent() {
   const [showLlmAnnotations, setShowLlmAnnotations] = useState(false)
   const [rowFlags, setRowFlags] = useState<Record<string, boolean>>({})
   const [noteBadges, setNoteBadges] = useState<NoteBadge[]>([])
+  const [llmNotes, setLlmNotes] = useState<NoteRecord[]>([])
   const [notesError, setNotesError] = useState<string | null>(null)
   const [rowAssignedNotes, setRowAssignedNotes] = useState<
     Record<string, Record<string, boolean>>
   >({})
-  const [staticNoteAssignmentsByRow, setStaticNoteAssignmentsByRow] = useState<
+  const [llmNoteAssignmentsByRow, setLlmNoteAssignmentsByRow] = useState<
     Record<string, string[]>
   >({})
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
-  const [expandedStaticNotes, setExpandedStaticNotes] = useState<
+  const [expandedLlmNotes, setExpandedLlmNotes] = useState<
     Record<string, boolean>
   >({})
   const [noteDetailsDrafts, setNoteDetailsDrafts] = useState<
@@ -570,6 +544,7 @@ function AnnotationPageContent() {
   const [noteSaveErrors, setNoteSaveErrors] = useState<Record<string, string>>({})
   const [flagSaveError, setFlagSaveError] = useState<string | null>(null)
   const [completionError, setCompletionError] = useState<string | null>(null)
+  const [llmVisibilityError, setLlmVisibilityError] = useState<string | null>(null)
   const [showSavedBadge, setShowSavedBadge] = useState(false)
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null)
   const [isDeletingNote, setIsDeletingNote] = useState(false)
@@ -607,6 +582,22 @@ function AnnotationPageContent() {
   const playbackRowRef = useRef<string | null>(null)
   const noteCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
+  const llmAnnotationVisibilityAdmin =
+    transcriptMeta?.llmAnnotationVisibilityAdmin ?? 'hidden'
+  const canToggleLlmAnnotations =
+    llmAnnotationVisibilityAdmin === 'always_visible' ||
+    (llmAnnotationVisibilityAdmin === 'visible_after_completion' &&
+      isAnnotationComplete)
+  const showLlmNotesMenu = canToggleLlmAnnotations
+  const shouldShowLlmAnnotations = canToggleLlmAnnotations && showLlmAnnotations
+  const llmNotesById = useMemo(
+    () =>
+      llmNotes.reduce((acc, note) => {
+        acc[note.id] = note
+        return acc
+      }, {} as Record<string, NoteRecord>),
+    [llmNotes],
+  )
   const timelineSettingsRef = useRef<HTMLDivElement | null>(null)
   const dragStateRef = useRef<{
     isPointerDown: boolean
@@ -622,7 +613,6 @@ function AnnotationPageContent() {
     startY: 0,
   })
   const skipClickRef = useRef<string | null>(null)
-  const showLlmNotesMenu = true
 
   const selectRow = useCallback((rowId: string) => {
     setCheckedRows({})
@@ -1342,10 +1332,17 @@ function AnnotationPageContent() {
 
       const normalized = createNoteBadges(payload.notes ?? [])
       const assignmentsByRow = createAssignmentLookup(payload.assignments ?? [])
+      const normalizedLlmNotes = payload.llmNotes ?? []
+      const llmAssignmentsByRow = createAssignmentListLookup(
+        payload.llmAssignments ?? [],
+      )
       setNoteBadges(normalized)
       setExpandedNotes(createExpandedNotes(normalized))
       setNoteDetailsDrafts(createNoteDetailsDrafts(normalized))
       setNoteTitleDrafts(createEmptyNoteTitles(normalized))
+      setLlmNotes(normalizedLlmNotes)
+      setExpandedLlmNotes(createExpandedLlmNotes(normalizedLlmNotes))
+      setLlmNoteAssignmentsByRow(llmAssignmentsByRow)
       return { notes: normalized, assignmentsByRow }
     } catch (error) {
       console.error('Failed to load notes', error)
@@ -1353,6 +1350,9 @@ function AnnotationPageContent() {
       setExpandedNotes({})
       setNoteDetailsDrafts({})
       setNoteTitleDrafts({})
+      setLlmNotes([])
+      setExpandedLlmNotes({})
+      setLlmNoteAssignmentsByRow({})
       const message =
         error instanceof Error ? error.message : 'Unable to load notes.'
       setNotesError(message)
@@ -1404,6 +1404,7 @@ function AnnotationPageContent() {
     async (transcriptId: string) => {
       setIsLoadingTranscript(true)
       setTranscriptError(null)
+      setLlmVisibilityError(null)
       setInstructionCards([])
       setInstructionCardsError(null)
       setVideoSource(null)
@@ -1450,9 +1451,13 @@ function AnnotationPageContent() {
             : normalizedLines
         const { notes, assignmentsByRow } = await loadNotes(transcriptId)
 
+        const nextLlmVisibility = Boolean(
+          payload.transcript?.llmAnnotationVisibilityUser,
+        )
         setTranscriptMeta(payload.transcript)
         setTranscriptRows(normalizedLines)
         setTranscriptSegments(normalizedSegments)
+        setShowLlmAnnotations(nextLlmVisibility)
         loadInstructionalMaterials(transcriptId)
         setRowFlags(
           normalizedLines.reduce((acc, row) => {
@@ -1461,7 +1466,6 @@ function AnnotationPageContent() {
           }, {} as Record<string, boolean>),
         )
         setRowAssignedNotes(buildRowAssignments(normalizedLines, notes, assignmentsByRow))
-        setStaticNoteAssignmentsByRow(createStaticNoteAssignments(normalizedLines))
         setCheckedRows({})
         setSelectedRow(initialRows[0]?.id ?? null)
         setActivePlaybackRowId(null)
@@ -1505,13 +1509,16 @@ function AnnotationPageContent() {
         setInstructionCardsError(null)
         setRowFlags({})
         setRowAssignedNotes({})
-        setStaticNoteAssignmentsByRow({})
         setNoteBadges([])
         setExpandedNotes({})
-        setExpandedStaticNotes({})
+        setLlmNotes([])
+        setLlmNoteAssignmentsByRow({})
+        setExpandedLlmNotes({})
         setNoteDetailsDrafts({})
         setNoteTitleDrafts({})
         setNotesError(null)
+        setShowLlmAnnotations(false)
+        setLlmVisibilityError(null)
         setActivePlaybackRowId(null)
         playbackRowRef.current = null
         setActiveSegmentIndex(0)
@@ -1558,13 +1565,16 @@ function AnnotationPageContent() {
       setInstructionCardsError(null)
       setRowFlags({})
       setRowAssignedNotes({})
-      setStaticNoteAssignmentsByRow({})
       setNoteBadges([])
       setExpandedNotes({})
-      setExpandedStaticNotes({})
+      setLlmNotes([])
+      setLlmNoteAssignmentsByRow({})
+      setExpandedLlmNotes({})
       setNoteDetailsDrafts({})
       setNoteTitleDrafts({})
       setNotesError(null)
+      setShowLlmAnnotations(false)
+      setLlmVisibilityError(null)
       setCheckedRows({})
       setSelectedRow(null)
       setActiveSegmentIndex(0)
@@ -2129,10 +2139,10 @@ function AnnotationPageContent() {
     setTimelineSettingsOpen(false)
   }
 
-  const handleStaticNoteBadgeToggle = (noteId: string) => {
+  const handleLlmNoteBadgeToggle = (noteId: string) => {
     setAnnotationCollapsed(false)
     setActiveAnnotationTab('assign')
-    setExpandedStaticNotes((previous) => ({
+    setExpandedLlmNotes((previous) => ({
       ...previous,
       [noteId]: !(previous[noteId] ?? false),
     }))
@@ -2403,6 +2413,53 @@ function AnnotationPageContent() {
     }
   }
 
+  const handleLlmVisibilityChange = async (visible: boolean) => {
+    const transcriptId = transcriptMeta?.id ?? ''
+    if (!transcriptId) {
+      setLlmVisibilityError('Select a transcript before updating LLM notes.')
+      return
+    }
+
+    const previousVisibility = showLlmAnnotations
+    setLlmVisibilityError(null)
+    setShowLlmAnnotations(visible)
+    setTranscriptMeta((previous) =>
+      previous ? { ...previous, llmAnnotationVisibilityUser: visible } : previous,
+    )
+
+    try {
+      const response = await fetch('/api/annotator/annotations/llm-visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcriptId, visible }),
+      })
+      const payload: { success?: boolean; error?: string } | null = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Unable to update LLM notes visibility.'
+        throw new Error(message)
+      }
+    } catch (error) {
+      console.error('Failed to update LLM notes visibility', error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to update LLM notes visibility.'
+      setShowLlmAnnotations(previousVisibility)
+      setTranscriptMeta((previous) =>
+        previous
+          ? {
+              ...previous,
+              llmAnnotationVisibilityUser: previousVisibility,
+            }
+          : previous,
+      )
+      setLlmVisibilityError(message)
+    }
+  }
+
   const handleCreateNote = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (isCreatingNote) return
@@ -2462,7 +2519,7 @@ function AnnotationPageContent() {
     }
 
     if (link.id === 'toggle-llm-annotations') {
-      setShowLlmAnnotations((previous) => !previous)
+      void handleLlmVisibilityChange(!showLlmAnnotations)
       return
     }
 
@@ -3179,14 +3236,16 @@ function AnnotationPageContent() {
                         const activeRowNotes = noteBadges.filter(
                           (note) => rowAssignedNotes[row.id]?.[note.id],
                         )
-                        const activeRowStaticNotes = showLlmAnnotations
-                          ? (staticNoteAssignmentsByRow[row.id] ?? [])
-                              .map((noteId) => STATIC_ASSIGN_NOTE_LOOKUP[noteId])
+                        const activeRowLlmNotes = shouldShowLlmAnnotations
+                          ? (llmNoteAssignmentsByRow[row.id] ?? [])
+                              .map((noteId) => llmNotesById[noteId])
                               .filter(
-                                (note): note is (typeof STATIC_ASSIGN_NOTES)[number] =>
+                                (note): note is NoteRecord =>
                                   Boolean(note),
                               )
                           : []
+                        const hasRowNotes =
+                          activeRowNotes.length > 0 || activeRowLlmNotes.length > 0
                         const speakerColor =
                           speakerColorMap[row.speaker] ?? fallbackSpeakerColor
                         const speakerChipClass = speakerColor.chip
@@ -3286,10 +3345,7 @@ function AnnotationPageContent() {
                                   minWidth: noteColumnWidth,
                                 }}
                               >
-                                {(hasVideo
-                                  ? activeRowNotes.length > 0 ||
-                                    activeRowStaticNotes.length > 0
-                                  : activeRowNotes.length > 0) && (
+                                {hasRowNotes && (
                                   <div className="flex flex-wrap gap-2">
                                     {activeRowNotes.map((note) => {
                                       if (!hasVideo) {
@@ -3333,37 +3389,38 @@ function AnnotationPageContent() {
                                         </button>
                                       )
                                     })}
-                                    {hasVideo &&
-                                      activeRowStaticNotes.map((note) => {
-                                        const isNoteExpanded =
-                                          expandedStaticNotes[note.id] ?? false
-                                        return (
-                                          <button
-                                            key={note.id}
-                                            type="button"
-                                            onClick={(event) => {
-                                              event.stopPropagation()
-                                              handleStaticNoteBadgeToggle(note.id)
-                                            }}
-                                            onMouseDown={(event) =>
-                                              event.stopPropagation()
-                                            }
-                                            onMouseUp={(event) => event.stopPropagation()}
-                                            onDoubleClick={(event) =>
-                                              event.stopPropagation()
-                                            }
-                                            aria-expanded={isNoteExpanded}
-                                            title={
-                                              isNoteExpanded
-                                                ? `Collapse "${note.title}" details`
-                                                : `Expand "${note.title}" details`
-                                            }
-                                            className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 shadow-sm shadow-indigo-100 transition"
-                                          >
-                                            {note.title}
-                                          </button>
-                                        )
-                                      })}
+                                    {activeRowLlmNotes.map((note) => {
+                                      const isNoteExpanded =
+                                        expandedLlmNotes[note.id] ?? false
+                                      const noteLabel =
+                                        note.title.trim() || `Note ${note.number}`
+                                      return (
+                                        <button
+                                          key={note.id}
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            handleLlmNoteBadgeToggle(note.id)
+                                          }}
+                                          onMouseDown={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          onMouseUp={(event) => event.stopPropagation()}
+                                          onDoubleClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          aria-expanded={isNoteExpanded}
+                                          title={
+                                            isNoteExpanded
+                                              ? `Collapse "${noteLabel}" details`
+                                              : `Expand "${noteLabel}" details`
+                                          }
+                                          className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 shadow-sm shadow-indigo-100 transition"
+                                        >
+                                          {noteLabel}
+                                        </button>
+                                      )
+                                    })}
                                   </div>
                                 )}
                               </td>
@@ -3418,6 +3475,11 @@ function AnnotationPageContent() {
                         {completionError}
                       </p>
                     )}
+                    {llmVisibilityError && (
+                      <p className="mt-1 text-xs text-rose-600">
+                        {llmVisibilityError}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {showSavedBadge && (
@@ -3465,7 +3527,7 @@ function AnnotationPageContent() {
                           {activeAnnotationTab === 'assign' && (
                             <div className="space-y-5">
                               <div className="space-y-3">
-                                {showLlmAnnotations && (
+                                {shouldShowLlmAnnotations && (
                                   <p className="text-[11px] uppercase tracking-widest text-slate-400">
                                     My notes
                                   </p>
@@ -3754,78 +3816,86 @@ function AnnotationPageContent() {
                                   </div>
                                 )
                               })}
-                              {showLlmAnnotations && (
+                              {shouldShowLlmAnnotations && (
                                 <div className="space-y-3 border-t border-slate-200/70 pt-3">
                                   <p className="text-[11px] uppercase tracking-widest text-slate-400">
                                     LLM notes
                                   </p>
-                                  {STATIC_ASSIGN_NOTES.map((note) => {
-                                    const isExpanded =
-                                      expandedStaticNotes[note.id] ?? false
-                                    return (
-                                      <div
-                                        key={note.id}
-                                        className="rounded-2xl border border-indigo-200 bg-indigo-50/70 text-indigo-700 transition"
-                                      >
-                                        <div className="flex items-center gap-3 px-3 py-3">
-                                          <div className="h-4 w-4" aria-hidden="true" />
-                                          <p className="text-sm font-semibold text-slate-900">
-                                            {note.title}
-                                          </p>
-                                          <button
-                                            type="button"
-                                            aria-label={
-                                              isExpanded
-                                                ? 'Hide static note details'
-                                                : 'Show static note details'
-                                            }
-                                            aria-expanded={isExpanded}
-                                            onClick={() =>
-                                              setExpandedStaticNotes((previous) => ({
-                                                ...previous,
-                                                [note.id]: !isExpanded,
-                                              }))
-                                            }
-                                            className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                                          >
-                                            <ChevronDown
-                                              className={`h-4 w-4 transition-transform ${
-                                                isExpanded ? 'rotate-180' : ''
-                                              }`}
-                                              aria-hidden="true"
-                                            />
-                                          </button>
-                                        </div>
-                                        {isExpanded && (
-                                          <div className="space-y-3 border-t border-slate-200/70 px-3 pb-3 pt-2">
-                                            <div className="space-y-2">
-                                              <p className="text-xs font-semibold text-slate-500">
-                                                Title
-                                              </p>
-                                              <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
-                                                {note.title}
-                                              </div>
-                                            </div>
-                                            {NOTE_DETAILS_FIELD_CONFIG.map(
-                                              (field) => (
-                                                <div
-                                                  key={`${note.id}-${field.id}`}
-                                                  className="space-y-2"
-                                                >
-                                                  <p className="text-xs font-semibold text-slate-500">
-                                                    {field.label}
-                                                  </p>
-                                                  <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
-                                                    {note[field.noteKey]}
-                                                  </div>
-                                                </div>
-                                              ),
-                                            )}
+                                  {llmNotes.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-3 py-3 text-xs text-slate-500">
+                                      No LLM notes available for this transcript yet.
+                                    </div>
+                                  ) : (
+                                    llmNotes.map((note) => {
+                                      const isExpanded =
+                                        expandedLlmNotes[note.id] ?? false
+                                      const noteLabel =
+                                        note.title.trim() || `Note ${note.number}`
+                                      return (
+                                        <div
+                                          key={note.id}
+                                          className="rounded-2xl border border-indigo-200 bg-indigo-50/70 text-indigo-700 transition"
+                                        >
+                                          <div className="flex items-center gap-3 px-3 py-3">
+                                            <div className="h-4 w-4" aria-hidden="true" />
+                                            <p className="text-sm font-semibold text-slate-900">
+                                              {noteLabel}
+                                            </p>
+                                            <button
+                                              type="button"
+                                              aria-label={
+                                                isExpanded
+                                                  ? 'Hide LLM note details'
+                                                  : 'Show LLM note details'
+                                              }
+                                              aria-expanded={isExpanded}
+                                              onClick={() =>
+                                                setExpandedLlmNotes((previous) => ({
+                                                  ...previous,
+                                                  [note.id]: !isExpanded,
+                                                }))
+                                              }
+                                              className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                            >
+                                              <ChevronDown
+                                                className={`h-4 w-4 transition-transform ${
+                                                  isExpanded ? 'rotate-180' : ''
+                                                }`}
+                                                aria-hidden="true"
+                                              />
+                                            </button>
                                           </div>
-                                        )}
-                                      </div>
-                                    )
-                                  })}
+                                          {isExpanded && (
+                                            <div className="space-y-3 border-t border-slate-200/70 px-3 pb-3 pt-2">
+                                              <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-slate-500">
+                                                  Title
+                                                </p>
+                                                <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
+                                                  {noteLabel}
+                                                </div>
+                                              </div>
+                                              {NOTE_DETAILS_FIELD_CONFIG.map(
+                                                (field) => (
+                                                  <div
+                                                    key={`${note.id}-${field.id}`}
+                                                    className="space-y-2"
+                                                  >
+                                                    <p className="text-xs font-semibold text-slate-500">
+                                                      {field.label}
+                                                    </p>
+                                                    <div className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
+                                                      {note[field.noteKey]}
+                                                    </div>
+                                                  </div>
+                                                ),
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })
+                                  )}
                                 </div>
                               )}
                             </div>
