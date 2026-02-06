@@ -84,16 +84,7 @@ export async function GET() {
             llm_annotation_visibility_admin: annotation.llm_annotation_visibility_admin,
           }
         })
-        .filter(
-          (
-            user,
-          ): user is {
-            id: string
-            name: string | null
-            username: string | null
-            llm_annotation_visibility_admin: typeof transcript.llm_annotation_visibility_default
-          } => Boolean(user),
-        )
+        .filter((user): user is NonNullable<typeof user> => user !== null)
       const uniqueUsers = new Map(assignedUsers.map((user) => [user.id, user]))
 
       return {
