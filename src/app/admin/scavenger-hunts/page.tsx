@@ -622,26 +622,36 @@ export default function ScavengerHuntsPage() {
       )
       const payload: SaveScavengerHuntResponse | null = await response.json().catch(() => null)
 
-      if (!response.ok || !payload?.success || !payload.scavengerHunt) {
+      if (!response.ok || !payload || !payload.success || !payload.scavengerHunt) {
         const message = payload?.error ?? 'Failed to save scavenger hunt.'
         throw new Error(message)
       }
 
+      const savedScavengerHunt = payload.scavengerHunt
+
       setTranscripts((current) =>
-        current.map((transcript) =>
-          transcript.id === activeTranscript.id
-            ? {
-                ...transcript,
-                scavenger_hunt: {
-                  ...(transcript.scavenger_hunt ?? {
-                    scavenger_visibility_admin: 'hidden',
-                    scavenger_visibility_user: false,
-                  }),
-                  ...payload.scavengerHunt,
-                },
-              }
-            : transcript,
-        ),
+        current.map((transcript) => {
+          if (transcript.id !== activeTranscript.id) {
+            return transcript
+          }
+
+          const updatedScavengerHunt: ScavengerHuntSummary = {
+            ...savedScavengerHunt,
+            scavenger_visibility_admin:
+              savedScavengerHunt.scavenger_visibility_admin ??
+              transcript.scavenger_hunt?.scavenger_visibility_admin ??
+              'hidden',
+            scavenger_visibility_user:
+              typeof savedScavengerHunt.scavenger_visibility_user === 'boolean'
+                ? savedScavengerHunt.scavenger_visibility_user
+                : transcript.scavenger_hunt?.scavenger_visibility_user ?? false,
+          }
+
+          return {
+            ...transcript,
+            scavenger_hunt: updatedScavengerHunt,
+          }
+        }),
       )
       setNotification('Scavenger hunt saved.')
       closeModal()

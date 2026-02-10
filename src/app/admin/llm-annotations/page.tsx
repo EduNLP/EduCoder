@@ -1315,7 +1315,7 @@ export default function LlmAnnotationsPage() {
           />
 
           <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all">
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-3xl transform transition-all">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">LLM Annotation Settings</h2>
