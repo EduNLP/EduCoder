@@ -73,7 +73,6 @@ export async function POST(request: Request, context: RouteContext) {
     const updated = await prisma.transcripts.update({
       where: { id: transcriptId },
       data: {
-        llm_annotation: true,
         annotation_file_name: upload.originalName,
         llm_annotation_gcs_path: upload.gcsPath,
       },

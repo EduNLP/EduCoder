@@ -115,6 +115,8 @@ type WorkspaceUsageRow = {
   llm_annotation_limit: number
 }
 
+type LlmAnnotationStatus = 'not_generated' | 'in_process' | 'generated'
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
@@ -425,7 +427,34 @@ const reserveWorkspaceLlmAnnotationUsage = async (workspaceId: string) => {
   return rows[0] ?? null
 }
 
+const updateTranscriptAnnotationStatus = async (
+  transcriptId: string,
+  status: LlmAnnotationStatus,
+) =>
+  prisma.transcripts.update({
+    where: { id: transcriptId },
+    data: { llm_annotation: status },
+  })
+
+const safeUpdateTranscriptAnnotationStatus = async (
+  transcriptId: string,
+  status: LlmAnnotationStatus,
+) => {
+  try {
+    await updateTranscriptAnnotationStatus(transcriptId, status)
+  } catch (error) {
+    console.error('Failed to update LLM annotation status', {
+      transcriptId,
+      status,
+      error,
+    })
+  }
+}
+
 export async function POST(request: Request, context: RouteContext) {
+  let transcriptId = ''
+  let shouldResetStatus = false
+
   try {
     const { userId: authUserId } = await auth()
     if (!authUserId) {
@@ -435,7 +464,7 @@ export async function POST(request: Request, context: RouteContext) {
       )
     }
 
-    const transcriptId = await resolveTranscriptId(request, context)
+    transcriptId = await resolveTranscriptId(request, context)
     if (!transcriptId) {
       return NextResponse.json(
         { success: false, error: 'Transcript id is required.' },
@@ -626,6 +655,9 @@ export async function POST(request: Request, context: RouteContext) {
       transcriptJson,
     )
 
+    await updateTranscriptAnnotationStatus(transcriptId, 'in_process')
+    shouldResetStatus = true
+
     let generatedNotes: GeneratedNote[]
     try {
       const outputText = await requestOpenAiJsonOutput({
@@ -637,6 +669,9 @@ export async function POST(request: Request, context: RouteContext) {
       })
       generatedNotes = parseGeneratedNotes(outputText)
     } catch (error) {
+      await safeUpdateTranscriptAnnotationStatus(transcriptId, 'not_generated')
+      shouldResetStatus = false
+
       const message =
         error instanceof Error
           ? error.message
@@ -711,6 +746,9 @@ export async function POST(request: Request, context: RouteContext) {
         }),
       )
     } catch (error) {
+      await safeUpdateTranscriptAnnotationStatus(transcriptId, 'not_generated')
+      shouldResetStatus = false
+
       const message =
         error instanceof Error
           ? error.message
@@ -733,52 +771,64 @@ export async function POST(request: Request, context: RouteContext) {
       })
 
       const nextNoteNumber = (maxNoteNumber._max.note_number ?? 0) + 1
-      if (generatedNotes.length === 0) {
-        return {
-          notesCreated: 0,
-          noteAssignmentsCreated: 0,
-        }
-      }
-
+      const notesCreated = generatedNotes.length
       let noteAssignmentsCreated = 0
-      for (const [index, note] of generatedNotes.entries()) {
-        const createdNote = await tx.notes.create({
-          data: {
-            transcript_id: transcriptId,
-            user_id: llmSystemUser.id,
-            note_number: nextNoteNumber + index,
-            title: note.title,
-            q1: note.answer_1,
-            q2: note.answer_2,
-            q3: note.answer_3,
-            source: 'llm',
-          },
-          select: {
-            note_id: true,
-          },
-        })
 
-        const lineIds = noteAssignmentLineIdsByNote[index] ?? []
-        if (lineIds.length === 0) {
-          continue
+      if (notesCreated > 0) {
+        for (const [index, note] of generatedNotes.entries()) {
+          const createdNote = await tx.notes.create({
+            data: {
+              transcript_id: transcriptId,
+              user_id: llmSystemUser.id,
+              note_number: nextNoteNumber + index,
+              title: note.title,
+              q1: note.answer_1,
+              q2: note.answer_2,
+              q3: note.answer_3,
+              source: 'llm',
+            },
+            select: {
+              note_id: true,
+            },
+          })
+
+          const lineIds = noteAssignmentLineIdsByNote[index] ?? []
+          if (lineIds.length === 0) {
+            continue
+          }
+
+          const assignmentResult = await tx.noteAssignments.createMany({
+            data: lineIds.map((lineId) => ({
+              note_id: createdNote.note_id,
+              line_id: lineId,
+            })),
+            skipDuplicates: true,
+          })
+
+          noteAssignmentsCreated += assignmentResult.count
         }
-
-        const assignmentResult = await tx.noteAssignments.createMany({
-          data: lineIds.map((lineId) => ({
-            note_id: createdNote.note_id,
-            line_id: lineId,
-          })),
-          skipDuplicates: true,
-        })
-
-        noteAssignmentsCreated += assignmentResult.count
       }
+
+      const totalLlmNotes = await tx.notes.count({
+        where: {
+          transcript_id: transcriptId,
+          source: 'llm',
+        },
+      })
+      const nextStatus: LlmAnnotationStatus =
+        totalLlmNotes > 0 ? 'generated' : 'not_generated'
+      await tx.transcripts.update({
+        where: { id: transcriptId },
+        data: { llm_annotation: nextStatus },
+      })
 
       return {
-        notesCreated: generatedNotes.length,
+        notesCreated,
         noteAssignmentsCreated,
       }
     })
+
+    shouldResetStatus = false
 
     return NextResponse.json({
       success: true,
@@ -787,6 +837,10 @@ export async function POST(request: Request, context: RouteContext) {
       noteAssignmentsCreated,
     })
   } catch (error) {
+    if (shouldResetStatus && transcriptId) {
+      await safeUpdateTranscriptAnnotationStatus(transcriptId, 'not_generated')
+    }
+
     console.error('Failed to generate LLM notes', error)
     return NextResponse.json(
       {

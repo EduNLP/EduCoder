@@ -2,7 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FileText, Users, Settings, LogOut, FileCheck, ScrollText, Video, Sparkles, LayoutGrid } from 'lucide-react'
+import {
+  FileText,
+  Users,
+  Settings,
+  LogOut,
+  FileCheck,
+  ScrollText,
+  Video,
+  Sparkles,
+  LayoutGrid,
+  Target,
+} from 'lucide-react'
 import { useClerk } from '@clerk/nextjs'
 
 const menuItems = [
@@ -30,6 +41,11 @@ const menuItems = [
     name: 'LLM Annotations',
     href: '/admin/llm-annotations',
     icon: Sparkles,
+  },
+  {
+    name: 'Scavenger Hunts',
+    href: '/admin/scavenger-hunts',
+    icon: Target,
   },
   {
     name: 'Videos',

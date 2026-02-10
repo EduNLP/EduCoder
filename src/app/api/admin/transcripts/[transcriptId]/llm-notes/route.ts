@@ -72,11 +72,20 @@ export async function DELETE(request: Request, context: RouteContext) {
       )
     }
 
-    const deleted = await prisma.notes.deleteMany({
-      where: {
-        transcript_id: transcriptId,
-        source: 'llm',
-      },
+    const deleted = await prisma.$transaction(async (tx) => {
+      const deletedNotes = await tx.notes.deleteMany({
+        where: {
+          transcript_id: transcriptId,
+          source: 'llm',
+        },
+      })
+
+      await tx.transcripts.update({
+        where: { id: transcriptId },
+        data: { llm_annotation: 'not_generated' },
+      })
+
+      return deletedNotes
     })
 
     return NextResponse.json({

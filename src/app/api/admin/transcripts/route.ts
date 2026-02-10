@@ -44,6 +44,19 @@ export async function GET() {
         llm_annotation_visibility_default: true,
         llm_annotation_visibility_per_annotator: true,
         llm_annotation_gcs_path: true,
+        scavengerHunt: {
+          select: {
+            id: true,
+            createdAt: true,
+            scavenger_visibility_admin: true,
+            scavenger_visibility_user: true,
+            _count: {
+              select: {
+                questions: true,
+              },
+            },
+          },
+        },
         notes: {
           where: {
             source: 'llm',
@@ -99,6 +112,15 @@ export async function GET() {
           transcript.llm_annotation_visibility_per_annotator,
         llm_annotation_gcs_path: transcript.llm_annotation_gcs_path,
         has_llm_notes: transcript.notes.length > 0,
+        scavenger_hunt: transcript.scavengerHunt
+          ? {
+              id: transcript.scavengerHunt.id,
+              created_at: transcript.scavengerHunt.createdAt,
+              question_count: transcript.scavengerHunt._count.questions,
+              scavenger_visibility_admin: transcript.scavengerHunt.scavenger_visibility_admin,
+              scavenger_visibility_user: transcript.scavengerHunt.scavenger_visibility_user,
+            }
+          : null,
         assigned_users: Array.from(uniqueUsers.values()),
       }
     })
