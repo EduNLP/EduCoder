@@ -71,6 +71,7 @@ type TranscriptMeta = {
   annotationCompleted: boolean
   llmAnnotationVisibilityUser: boolean
   llmAnnotationVisibilityAdmin: LlmAnnotationVisibilityAdmin
+  scavengerVisibilityAdmin: LlmAnnotationVisibilityAdmin
   lastUpdated: string | null
 }
 
@@ -589,6 +590,12 @@ function AnnotationPageContent() {
     (llmAnnotationVisibilityAdmin === 'visible_after_completion' &&
       isAnnotationComplete)
   const showLlmNotesMenu = canToggleLlmAnnotations
+  const scavengerVisibilityAdmin =
+    transcriptMeta?.scavengerVisibilityAdmin ?? 'hidden'
+  const showScavengerHuntMenu =
+    scavengerVisibilityAdmin === 'always_visible' ||
+    (scavengerVisibilityAdmin === 'visible_after_completion' &&
+      isAnnotationComplete)
   const shouldShowLlmAnnotations = canToggleLlmAnnotations && showLlmAnnotations
   const llmNotesById = useMemo(
     () =>
@@ -619,8 +626,8 @@ function AnnotationPageContent() {
     setSelectedRow(rowId)
     setAnnotationCollapsed(false)
   }, [])
-  const annotationMenuLinks = useMemo(() => {
-    const links = [
+  const annotationMenuLinks = useMemo(
+    () => [
       {
         id: 'toggle-toolbar',
         label: toolbarVisible
@@ -628,25 +635,39 @@ function AnnotationPageContent() {
           : 'Show search & filters',
         icon: toolbarVisible ? EyeOff : Eye,
       },
-      {
-        id: 'toggle-llm-annotations',
-        label: showLlmAnnotations ? 'Hide LLM notes' : 'Show LLM notes',
-        icon: showLlmAnnotations ? EyeOff : Eye,
-      },
+      ...(showLlmNotesMenu
+        ? [
+            {
+              id: 'toggle-llm-annotations',
+              label: showLlmAnnotations ? 'Hide LLM notes' : 'Show LLM notes',
+              icon: showLlmAnnotations ? EyeOff : Eye,
+            },
+          ]
+        : []),
+      ...(showScavengerHuntMenu
+        ? [
+            {
+              id: 'scavenger-hunt',
+              label: 'Scavenger Hunt',
+              icon: Search,
+            },
+          ]
+        : []),
       {
         id: 'complete',
         label: isAnnotationComplete ? 'Mark as In Progress' : 'Mark as Complete',
         icon: BookmarkCheck,
       },
       { id: 'logout', label: 'Log Out', icon: LogOut },
-    ]
-
-    if (!showLlmNotesMenu) {
-      links.splice(1, 1)
-    }
-
-    return links
-  }, [isAnnotationComplete, showLlmAnnotations, showLlmNotesMenu, toolbarVisible])
+    ],
+    [
+      isAnnotationComplete,
+      showLlmAnnotations,
+      showLlmNotesMenu,
+      showScavengerHuntMenu,
+      toolbarVisible,
+    ],
+  )
 
   useEffect(() => {
     return () => {
@@ -2525,6 +2546,10 @@ function AnnotationPageContent() {
 
     if (link.id === 'complete') {
       handleMarkAnnotationComplete(!isAnnotationComplete)
+    }
+
+    if (link.id === 'scavenger-hunt') {
+      router.push('/scavenger-hunt')
     }
   }
 

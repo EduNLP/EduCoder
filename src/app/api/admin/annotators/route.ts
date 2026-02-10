@@ -203,6 +203,32 @@ const normalizeTranscriptIds = (candidate: unknown): string[] => {
   return Array.from(uniqueIds)
 }
 
+const buildScavengerAssignmentRows = async ({
+  transcriptIds,
+  annotatorId,
+}: {
+  transcriptIds: string[]
+  annotatorId: string
+}): Promise<Prisma.ScavengerHuntAssignmentCreateManyInput[]> => {
+  if (transcriptIds.length === 0) {
+    return []
+  }
+
+  const scavengerHunts = await prisma.scavengerHunt.findMany({
+    where: { transcript_id: { in: transcriptIds } },
+    select: { id: true },
+  })
+
+  if (scavengerHunts.length === 0) {
+    return []
+  }
+
+  return scavengerHunts.map((hunt) => ({
+    scavenger_id: hunt.id,
+    created_for: annotatorId,
+  }))
+}
+
 const assignTranscriptsToAnnotator = async ({
   transcriptIds,
   annotatorId,
@@ -238,8 +264,28 @@ const assignTranscriptsToAnnotator = async ({
     }),
   )
 
+  const scavengerAssignmentRows = await buildScavengerAssignmentRows({
+    transcriptIds: transcripts.map((transcript) => transcript.id),
+    annotatorId,
+  })
+
+  const operations: Prisma.PrismaPromise<unknown>[] = []
+
   if (annotationRows.length > 0) {
-    await prisma.annotations.createMany({ data: annotationRows })
+    operations.push(prisma.annotations.createMany({ data: annotationRows }))
+  }
+
+  if (scavengerAssignmentRows.length > 0) {
+    operations.push(
+      prisma.scavengerHuntAssignment.createMany({
+        data: scavengerAssignmentRows,
+        skipDuplicates: true,
+      }),
+    )
+  }
+
+  if (operations.length > 0) {
+    await prisma.$transaction(operations)
   }
 
   return annotationRows.length
@@ -341,6 +387,20 @@ const syncAnnotatorTranscriptAssignments = async ({
               transcriptDefaults.llm_annotation_visibility_default,
           }
         }),
+      }),
+    )
+  }
+
+  const scavengerAssignmentRows = await buildScavengerAssignmentRows({
+    transcriptIds,
+    annotatorId,
+  })
+
+  if (scavengerAssignmentRows.length > 0) {
+    operations.push(
+      prisma.scavengerHuntAssignment.createMany({
+        data: scavengerAssignmentRows,
+        skipDuplicates: true,
       }),
     )
   }

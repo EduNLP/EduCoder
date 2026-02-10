@@ -5,13 +5,15 @@ import { Search, Upload, FileText, Download, Trash2, BookOpen } from 'lucide-rea
 import UploadTranscriptModal from '@/components/admin/UploadTranscriptModal'
 import UploadInstructionMaterialsModal from '@/components/admin/UploadInstructionMaterialsModal'
 
+type LlmAnnotationStatus = 'not_generated' | 'in_process' | 'generated'
+
 type TranscriptRecord = {
   id: string
   title: string
   grade: string | null
   transcript_file_name: string | null
   annotation_file_name: string | null
-  llm_annotation: boolean
+  llm_annotation: LlmAnnotationStatus
   assigned_users: { id: string; name: string; username: string }[]
 }
 
@@ -109,6 +111,7 @@ export default function TranscriptsPage() {
     grade: string | null
     transcript_file_name: string | null
     annotation_file_name: string | null
+    llm_annotation?: LlmAnnotationStatus
   }) => {
     setTranscripts((previous) => {
       const normalized: TranscriptRecord = {
@@ -116,7 +119,7 @@ export default function TranscriptsPage() {
         grade: transcript.grade?.trim() || null,
         transcript_file_name: transcript.transcript_file_name ?? null,
         annotation_file_name: transcript.annotation_file_name ?? null,
-        llm_annotation: Boolean(transcript.annotation_file_name),
+        llm_annotation: transcript.llm_annotation ?? 'not_generated',
         assigned_users: [],
       }
 
@@ -156,7 +159,7 @@ export default function TranscriptsPage() {
             grade: transcript.grade?.trim() || null,
             transcript_file_name: transcript.transcript_file_name ?? null,
             annotation_file_name: transcript.annotation_file_name ?? null,
-            llm_annotation: Boolean(transcript.llm_annotation),
+            llm_annotation: transcript.llm_annotation ?? 'not_generated',
             assigned_users: transcript.assigned_users ?? [],
           }))
           setTranscripts(normalized)

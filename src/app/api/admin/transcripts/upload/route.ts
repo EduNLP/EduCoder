@@ -135,7 +135,7 @@ export async function POST(request: Request) {
           instruction_context: instructions || '',
           transcript_file_name: mainUpload.originalName,
           gcs_path: mainUpload.gcsPath,
-          llm_annotation: Boolean(associatedUpload),
+          llm_annotation: 'not_generated',
           annotation_file_name: associatedUpload?.originalName ?? null,
           llm_annotation_gcs_path: associatedUpload?.gcsPath ?? null,
         },

@@ -130,7 +130,7 @@ export async function GET(request: Request, context: RouteContext) {
       endTime: segment.end_time === null ? null : Number(segment.end_time),
     }))
 
-    const [latestAssignment, noteCount] = await Promise.all([
+    const [latestAssignment, noteCount, scavengerAssignment] = await Promise.all([
       prisma.noteAssignments.findFirst({
         where: {
           note: {
@@ -149,6 +149,17 @@ export async function GET(request: Request, context: RouteContext) {
         where: {
           user_id: annotator.id,
           transcript_id: transcriptId,
+        },
+      }),
+      prisma.scavengerHuntAssignment.findFirst({
+        where: {
+          created_for: annotator.id,
+          scavenger: {
+            transcript_id: transcriptId,
+          },
+        },
+        select: {
+          scavenger_visibility_admin: true,
         },
       }),
     ])
@@ -172,6 +183,8 @@ export async function GET(request: Request, context: RouteContext) {
         annotationCompleted: annotation.annotation_completed,
         llmAnnotationVisibilityUser: annotation.llm_annotation_visibility_user,
         llmAnnotationVisibilityAdmin: annotation.llm_annotation_visibility_admin,
+        scavengerVisibilityAdmin:
+          scavengerAssignment?.scavenger_visibility_admin ?? 'hidden',
         lastUpdated:
           latestAssignment?.createdAt?.toISOString?.() ??
           null,

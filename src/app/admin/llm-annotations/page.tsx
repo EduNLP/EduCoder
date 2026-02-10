@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 type LlmAnnotationVisibilityDefault = 'hidden' | 'visible_after_completion' | 'always_visible'
+type LlmAnnotationStatus = 'not_generated' | 'in_process' | 'generated'
 
 type TranscriptRecord = {
   id: string
@@ -20,7 +21,7 @@ type TranscriptRecord = {
   grade: string | null
   transcript_file_name: string | null
   annotation_file_name: string | null
-  llm_annotation: boolean
+  llm_annotation: LlmAnnotationStatus
   llm_annotation_visibility_default: LlmAnnotationVisibilityDefault
   llm_annotation_visibility_per_annotator: boolean
   llm_annotation_gcs_path: string | null
@@ -34,7 +35,7 @@ type TranscriptPayload = {
   grade?: string | null
   transcript_file_name?: string | null
   annotation_file_name?: string | null
-  llm_annotation?: boolean
+  llm_annotation?: LlmAnnotationStatus | null
   llm_annotation_visibility_default?: LlmAnnotationVisibilityDefault | null
   llm_annotation_visibility_per_annotator?: boolean | null
   llm_annotation_gcs_path?: string | null
@@ -321,7 +322,7 @@ export default function LlmAnnotationsPage() {
           grade: transcript.grade?.trim() || null,
           transcript_file_name: transcript.transcript_file_name ?? null,
           annotation_file_name: transcript.annotation_file_name ?? null,
-          llm_annotation: Boolean(transcript.llm_annotation),
+          llm_annotation: transcript.llm_annotation ?? 'not_generated',
           llm_annotation_visibility_default:
             transcript.llm_annotation_visibility_default ?? 'hidden',
           llm_annotation_visibility_per_annotator: Boolean(
@@ -440,6 +441,14 @@ export default function LlmAnnotationsPage() {
       return next
     })
 
+    setTranscripts((current) =>
+      current.map((transcript) =>
+        transcript.id === transcriptId
+          ? { ...transcript, llm_annotation: 'in_process' }
+          : transcript,
+      ),
+    )
+
     try {
       const response = await fetch(`/api/admin/transcripts/${transcriptId}/llm-notes/generate`, {
         method: 'POST',
@@ -451,12 +460,16 @@ export default function LlmAnnotationsPage() {
         throw new Error(message)
       }
 
+      const notesCreated = typeof payload?.notesCreated === 'number' ? payload.notesCreated : 0
+
       setTranscripts((current) =>
         current.map((transcript) =>
           transcript.id === transcriptId
             ? {
                 ...transcript,
-                has_llm_notes: true,
+                has_llm_notes: transcript.has_llm_notes || notesCreated > 0,
+                llm_annotation:
+                  transcript.has_llm_notes || notesCreated > 0 ? 'generated' : 'not_generated',
               }
             : transcript,
         ),
@@ -467,6 +480,14 @@ export default function LlmAnnotationsPage() {
         transcriptId,
         message: error instanceof Error ? error.message : 'Failed to generate LLM notes.',
       })
+
+      setTranscripts((current) =>
+        current.map((transcript) =>
+          transcript.id === transcriptId
+            ? { ...transcript, llm_annotation: 'not_generated' }
+            : transcript,
+        ),
+      )
     } finally {
       setGeneratingTranscriptIds((current) => {
         const next = new Set(current)
@@ -565,6 +586,7 @@ export default function LlmAnnotationsPage() {
             ? {
                 ...item,
                 has_llm_notes: false,
+                llm_annotation: 'not_generated',
               }
             : item,
         ),
@@ -865,10 +887,12 @@ export default function LlmAnnotationsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredTranscripts.map((transcript) => {
           const hasAttachment = Boolean(
-            transcript.llm_annotation_gcs_path || transcript.annotation_file_name || transcript.llm_annotation,
+            transcript.llm_annotation_gcs_path || transcript.annotation_file_name,
           )
-          const hasGeneratedNotes = transcript.has_llm_notes
-          const isGenerating = generatingTranscriptIds.has(transcript.id)
+          const hasGeneratedNotes =
+            transcript.has_llm_notes || transcript.llm_annotation === 'generated'
+          const isGenerating =
+            transcript.llm_annotation === 'in_process' || generatingTranscriptIds.has(transcript.id)
           const isGenerated = hasAttachment || hasGeneratedNotes
           const canDownload = hasAttachment || hasGeneratedNotes
           const isDownloading = downloadingTranscriptId === transcript.id
@@ -918,7 +942,7 @@ export default function LlmAnnotationsPage() {
                         ? 'Generation in progress'
                         : hasGeneratedNotes
                           ? 'LLM notes generated'
-                        : 'LLM file not generated'}
+                        : 'LLM notes not generated'}
                   </span>
                 </div>
 
