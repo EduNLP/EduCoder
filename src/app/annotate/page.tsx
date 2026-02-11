@@ -622,7 +622,7 @@ function AnnotationPageContent() {
   const skipClickRef = useRef<string | null>(null)
 
   const selectRow = useCallback((rowId: string) => {
-    setCheckedRows({})
+    setCheckedRows({ [rowId]: true })
     setSelectedRow(rowId)
     setAnnotationCollapsed(false)
   }, [])
@@ -2549,7 +2549,12 @@ function AnnotationPageContent() {
     }
 
     if (link.id === 'scavenger-hunt') {
-      router.push('/scavenger-hunt')
+      const transcriptId = transcriptMeta?.id
+      const nextPath = transcriptId
+        ? `/scavenger-hunt?transcript=${encodeURIComponent(transcriptId)}`
+        : '/scavenger-hunt'
+      router.push(nextPath)
+      return
     }
   }
 
