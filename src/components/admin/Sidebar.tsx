@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   FileCheck,
+  ClipboardCheck,
   ScrollText,
   Video,
   Sparkles,
@@ -46,6 +47,11 @@ const menuItems = [
     name: 'Scavenger Hunts',
     href: '/admin/scavenger-hunts',
     icon: Target,
+  },
+  {
+    name: 'Scavenger Submissions',
+    href: '/admin/scavenger-submissions',
+    icon: ClipboardCheck,
   },
   {
     name: 'Videos',

@@ -208,19 +208,19 @@ export default function UploadTranscriptModal({
               />
             </div>
 
-            {/* Instruction and Context */}
+            {/* Lesson Learning Goals */}
             <div>
               <label
                 htmlFor="instructionContext"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Instruction and Context
+                Lesson Learning Goals
               </label>
               <textarea
                 id="instructionContext"
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Provide any necessary instructions or context for annotators"
+                placeholder="Provide any information and the learning objectives of this lesson"
                 rows={3}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
