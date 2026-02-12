@@ -1,10 +1,13 @@
 'use client'
 
 import {
+  BookmarkCheck,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  FileText,
+  LogOut,
   Pause,
   Play,
   Settings,
@@ -57,6 +60,7 @@ type TranscriptMeta = {
   llmAnnotationVisibilityUser: boolean
   llmAnnotationVisibilityAdmin: LlmAnnotationVisibilityAdmin
   scavengerVisibilityAdmin: LlmAnnotationVisibilityAdmin
+  scavengerCompleted?: boolean
   lastUpdated: string | null
 }
 
@@ -152,6 +156,7 @@ type NoteListResponse = {
 
 type ScavengerQuestionResponse = {
   success: boolean
+  scavengerCompleted?: boolean
   scavengerHunt?: {
     id: string
     created_at: string
@@ -159,9 +164,40 @@ type ScavengerQuestionResponse = {
       id: string
       question: string
       orderIndex: number
+      answer?: string | null
+      selectedLineIds?: string[]
     }>
   } | null
   error?: string
+}
+
+type SaveScavengerAnswerResponse = {
+  success: boolean
+  answer?: {
+    questionId: string
+    answer: string
+    selectedLineIds: string[]
+    updatedAt: string | null
+  }
+  error?: string
+}
+
+type UpdateScavengerCompletionResponse = {
+  success: boolean
+  completed?: boolean
+  error?: string
+}
+
+type ScavengerQuestion = {
+  key: string
+  id: string | null
+  prompt: string
+  orderIndex: number
+}
+
+type ScavengerAnswerDraft = {
+  answer: string
+  selectedLineIds: string[]
 }
 
 type SpeakerColor = {
@@ -200,6 +236,9 @@ const DEFAULT_QUESTION_PROMPTS = [
   'Where does a student shift strategies after a teacher prompt?',
   'Identify a moment where the class clarifies a misconception.',
 ]
+
+const SCAVENGER_AUTOSAVE_DEBOUNCE_MS = 300
+const SCAVENGER_SAVED_BADGE_DURATION_MS = 1200
 
 const NOTE_BADGE_COLORS = [
   'border-sky-200 bg-sky-50 text-sky-700',
@@ -368,6 +407,68 @@ const createExpandedMap = (notes: NoteEntry[]) =>
     return acc
   }, {} as Record<string, boolean>)
 
+const createScavengerQuestionKey = (questionId: string | null, index: number) =>
+  questionId ? questionId : `default-${index + 1}`
+
+const createDefaultScavengerQuestions = (): ScavengerQuestion[] =>
+  DEFAULT_QUESTION_PROMPTS.map((prompt, index) => ({
+    key: createScavengerQuestionKey(null, index),
+    id: null,
+    prompt,
+    orderIndex: index + 1,
+  }))
+
+const createEmptyScavengerAnswerDraft = (): ScavengerAnswerDraft => ({
+  answer: '',
+  selectedLineIds: [],
+})
+
+const normalizeLineIds = (lineIds: string[]) =>
+  Array.from(new Set(lineIds.map((lineId) => lineId.trim()).filter(Boolean)))
+
+const normalizeScavengerDraft = (
+  draft: ScavengerAnswerDraft,
+): ScavengerAnswerDraft => ({
+  answer: draft.answer,
+  selectedLineIds: normalizeLineIds(draft.selectedLineIds),
+})
+
+const cloneScavengerDraft = (
+  draft: ScavengerAnswerDraft,
+): ScavengerAnswerDraft => ({
+  answer: draft.answer,
+  selectedLineIds: [...draft.selectedLineIds],
+})
+
+const cloneScavengerDraftMap = (
+  drafts: Record<string, ScavengerAnswerDraft>,
+) =>
+  Object.entries(drafts).reduce((acc, [key, draft]) => {
+    acc[key] = cloneScavengerDraft(draft)
+    return acc
+  }, {} as Record<string, ScavengerAnswerDraft>)
+
+const areScavengerDraftsEqual = (
+  first: ScavengerAnswerDraft,
+  second: ScavengerAnswerDraft,
+) => {
+  if (first.answer !== second.answer) {
+    return false
+  }
+  if (first.selectedLineIds.length !== second.selectedLineIds.length) {
+    return false
+  }
+  return first.selectedLineIds.every((lineId, index) => lineId === second.selectedLineIds[index])
+}
+
+const buildScavengerDraftMap = (
+  questions: ScavengerQuestion[],
+) =>
+  questions.reduce((acc, question) => {
+    acc[question.key] = createEmptyScavengerAnswerDraft()
+    return acc
+  }, {} as Record<string, ScavengerAnswerDraft>)
+
 type NotePanelProps = {
   title: string
   description: string
@@ -473,31 +574,41 @@ export default function ScavengerHuntPage() {
   const searchParams = useSearchParams()
   const { theme } = useTheme()
 
-  const [response, setResponse] = useState('')
   const [questionIndex, setQuestionIndex] = useState(0)
-  const [questionPrompts, setQuestionPrompts] = useState<string[]>(
-    DEFAULT_QUESTION_PROMPTS,
+  const [scavengerQuestions, setScavengerQuestions] = useState<ScavengerQuestion[]>(
+    () => createDefaultScavengerQuestions(),
+  )
+  const [answersByQuestionKey, setAnswersByQuestionKey] = useState<
+    Record<string, ScavengerAnswerDraft>
+  >(() => {
+    const defaultQuestions = createDefaultScavengerQuestions()
+    return buildScavengerDraftMap(defaultQuestions)
+  })
+  const [scavengerAutosaveError, setScavengerAutosaveError] = useState<string | null>(
+    null,
+  )
+  const [showSavedBadge, setShowSavedBadge] = useState(false)
+  const [isMarkingScavengerComplete, setIsMarkingScavengerComplete] = useState(false)
+  const [scavengerCompletionError, setScavengerCompletionError] = useState<string | null>(
+    null,
   )
 
   const [transcriptMeta, setTranscriptMeta] = useState<TranscriptMeta | null>(null)
   const [transcriptRows, setTranscriptRows] = useState<TranscriptRow[]>([])
   const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegment[]>([])
   const [selectedRow, setSelectedRow] = useState<string | null>(null)
-  const [checkedRows, setCheckedRows] = useState<Record<string, boolean>>({})
   const [rowFlags, setRowFlags] = useState<Record<string, boolean>>({})
 
   const [isLoadingTranscript, setIsLoadingTranscript] = useState(false)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [isLessonResourcesModalOpen, setIsLessonResourcesModalOpen] = useState(false)
   const [instructionCards, setInstructionCards] = useState<InstructionCard[]>([])
   const [isLoadingInstructionCards, setIsLoadingInstructionCards] = useState(false)
-  const [instructionCardsError, setInstructionCardsError] = useState<string | null>(
+  const [instructionCardsError, setInstructionCardsError] = useState<string | null>(null)
+  const [instructionalMaterialLink, setInstructionalMaterialLink] = useState<string | null>(
     null,
   )
-  const [instructionalMaterialLink, setInstructionalMaterialLink] = useState<
-    string | null
-  >(null)
-  const [isLessonResourcesModalOpen, setIsLessonResourcesModalOpen] = useState(false)
-  const [lessonResourceSlideIndex, setLessonResourceSlideIndex] = useState(0)
+  const [activeInstructionSlideIndex, setActiveInstructionSlideIndex] = useState(0)
 
   const [videoSource, setVideoSource] = useState<VideoMeta | null>(null)
   const [videoSourceError, setVideoSourceError] = useState<string | null>(null)
@@ -545,6 +656,11 @@ export default function ScavengerHuntPage() {
   const timelineSettingsRef = useRef<HTMLDivElement | null>(null)
   const activeTranscriptFetchRef = useRef<string | null>(null)
   const playbackRowRef = useRef<string | null>(null)
+  const answersByQuestionRef = useRef<Record<string, ScavengerAnswerDraft>>({})
+  const savedAnswersByQuestionRef = useRef<Record<string, ScavengerAnswerDraft>>({})
+  const autosaveTimeoutsRef = useRef<Record<string, number>>({})
+  const autosaveAbortControllersRef = useRef<Record<string, AbortController>>({})
+  const savedBadgeTimeout = useRef<number | undefined>(undefined)
   const dragStateRef = useRef<{
     isPointerDown: boolean
     hasDragged: boolean
@@ -572,6 +688,42 @@ export default function ScavengerHuntPage() {
     searchParams?.get('transcript')?.trim() ||
     searchParams?.get('transcriptId')?.trim() ||
     null
+
+  const currentQuestion = scavengerQuestions[questionIndex] ?? null
+  const currentQuestionDraft = useMemo(
+    () =>
+      currentQuestion
+        ? answersByQuestionKey[currentQuestion.key] ?? createEmptyScavengerAnswerDraft()
+        : createEmptyScavengerAnswerDraft(),
+    [answersByQuestionKey, currentQuestion],
+  )
+  const response = currentQuestionDraft.answer
+  const checkedRows = useMemo(
+    () =>
+      currentQuestionDraft.selectedLineIds.reduce((acc, lineId) => {
+        acc[lineId] = true
+        return acc
+      }, {} as Record<string, boolean>),
+    [currentQuestionDraft.selectedLineIds],
+  )
+
+  const isScavengerComplete = Boolean(transcriptMeta?.scavengerCompleted)
+  const scavengerMenuLinks = useMemo(
+    () => [
+      {
+        id: 'complete',
+        label: isMarkingScavengerComplete
+          ? 'Updating status...'
+          : isScavengerComplete
+            ? 'Mark as In Progress'
+            : 'Mark as Complete',
+        icon: BookmarkCheck,
+      },
+      { id: 'annotations', label: 'Annotations', icon: FileText },
+      { id: 'logout', label: 'Log Out', icon: LogOut },
+    ],
+    [isMarkingScavengerComplete, isScavengerComplete],
+  )
 
   const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
   const llmAnnotationVisibilityAdmin =
@@ -866,10 +1018,227 @@ export default function ScavengerHuntPage() {
 
   const shouldShowPlayOverlay = hasVideo && !hasPlayedOnce && showVideoPlayOverlay
 
-  const selectRow = useCallback((rowId: string) => {
-    setCheckedRows({ [rowId]: true })
-    setSelectedRow(rowId)
+  const triggerSavedBadge = useCallback(() => {
+    setShowSavedBadge(true)
+    if (savedBadgeTimeout.current) {
+      window.clearTimeout(savedBadgeTimeout.current)
+    }
+    savedBadgeTimeout.current = window.setTimeout(() => {
+      setShowSavedBadge(false)
+    }, SCAVENGER_SAVED_BADGE_DURATION_MS)
   }, [])
+
+  const clearScavengerAutosaveState = useCallback(() => {
+    Object.values(autosaveTimeoutsRef.current).forEach((timeoutId) => {
+      window.clearTimeout(timeoutId)
+    })
+    autosaveTimeoutsRef.current = {}
+
+    Object.values(autosaveAbortControllersRef.current).forEach((controller) => {
+      controller.abort()
+    })
+    autosaveAbortControllersRef.current = {}
+
+    if (savedBadgeTimeout.current) {
+      window.clearTimeout(savedBadgeTimeout.current)
+      savedBadgeTimeout.current = undefined
+    }
+    setShowSavedBadge(false)
+    savedAnswersByQuestionRef.current = {}
+    setScavengerAutosaveError(null)
+  }, [])
+
+  const saveScavengerDraft = useCallback(
+    async (question: ScavengerQuestion, draft: ScavengerAnswerDraft) => {
+      if (!question.id) {
+        return
+      }
+
+      const transcriptId =
+        activeTranscriptFetchRef.current ?? transcriptMeta?.id ?? requestedTranscriptId
+      if (!transcriptId) {
+        return
+      }
+
+      const normalizedDraft = normalizeScavengerDraft(draft)
+      const existingController = autosaveAbortControllersRef.current[question.key]
+      if (existingController) {
+        existingController.abort()
+      }
+
+      const controller = new AbortController()
+      autosaveAbortControllersRef.current[question.key] = controller
+
+      try {
+        const response = await fetch(
+          `/api/annotator/transcripts/${encodeURIComponent(
+            transcriptId,
+          )}/scavenger-hunt?transcriptId=${encodeURIComponent(transcriptId)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              questionId: question.id,
+              answer: normalizedDraft.answer,
+              lineIds: normalizedDraft.selectedLineIds,
+            }),
+            signal: controller.signal,
+          },
+        )
+
+        const payload: SaveScavengerAnswerResponse | null = await response
+          .json()
+          .catch(() => null)
+
+        if (!response.ok || !payload?.success) {
+          const message = payload?.error ?? 'Unable to auto-save scavenger response.'
+          throw new Error(message)
+        }
+
+        const savedDraft = normalizeScavengerDraft({
+          answer: payload.answer?.answer ?? normalizedDraft.answer,
+          selectedLineIds:
+            payload.answer?.selectedLineIds ?? normalizedDraft.selectedLineIds,
+        })
+
+        savedAnswersByQuestionRef.current[question.key] = cloneScavengerDraft(savedDraft)
+        setScavengerAutosaveError(null)
+        const latestDraftForQuestion =
+          answersByQuestionRef.current[question.key] ?? createEmptyScavengerAnswerDraft()
+        const draftUnchangedSinceRequest = areScavengerDraftsEqual(
+          latestDraftForQuestion,
+          normalizedDraft,
+        )
+
+        if (!draftUnchangedSinceRequest) {
+          return
+        }
+
+        triggerSavedBadge()
+
+        setAnswersByQuestionKey((previous) => {
+          const currentDraft =
+            previous[question.key] ?? createEmptyScavengerAnswerDraft()
+          if (areScavengerDraftsEqual(currentDraft, savedDraft)) {
+            return previous
+          }
+
+          const next = {
+            ...previous,
+            [question.key]: savedDraft,
+          }
+          answersByQuestionRef.current = next
+          return next
+        })
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return
+        }
+
+        console.error('Failed to auto-save scavenger response', error)
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to auto-save scavenger response.'
+        setScavengerAutosaveError(message)
+      } finally {
+        if (autosaveAbortControllersRef.current[question.key] === controller) {
+          delete autosaveAbortControllersRef.current[question.key]
+        }
+      }
+    },
+    [requestedTranscriptId, transcriptMeta?.id, triggerSavedBadge],
+  )
+
+  const queueScavengerAutosave = useCallback(
+    (question: ScavengerQuestion, draft: ScavengerAnswerDraft) => {
+      if (!question.id) {
+        return
+      }
+
+      const normalizedDraft = normalizeScavengerDraft(draft)
+      const savedDraft = savedAnswersByQuestionRef.current[question.key]
+      if (savedDraft && areScavengerDraftsEqual(savedDraft, normalizedDraft)) {
+        const existingTimeout = autosaveTimeoutsRef.current[question.key]
+        if (existingTimeout) {
+          window.clearTimeout(existingTimeout)
+          delete autosaveTimeoutsRef.current[question.key]
+        }
+        return
+      }
+
+      const existingTimeout = autosaveTimeoutsRef.current[question.key]
+      if (existingTimeout) {
+        window.clearTimeout(existingTimeout)
+      }
+
+      autosaveTimeoutsRef.current[question.key] = window.setTimeout(() => {
+        delete autosaveTimeoutsRef.current[question.key]
+        const latestDraft =
+          answersByQuestionRef.current[question.key] ?? createEmptyScavengerAnswerDraft()
+        const normalizedLatestDraft = normalizeScavengerDraft(latestDraft)
+        const latestSavedDraft = savedAnswersByQuestionRef.current[question.key]
+        if (
+          latestSavedDraft &&
+          areScavengerDraftsEqual(latestSavedDraft, normalizedLatestDraft)
+        ) {
+          return
+        }
+        void saveScavengerDraft(question, normalizedLatestDraft)
+      }, SCAVENGER_AUTOSAVE_DEBOUNCE_MS)
+    },
+    [saveScavengerDraft],
+  )
+
+  const updateCurrentQuestionDraft = useCallback(
+    (updater: (draft: ScavengerAnswerDraft) => ScavengerAnswerDraft) => {
+      if (!currentQuestion) {
+        return
+      }
+
+      setAnswersByQuestionKey((previous) => {
+        const currentDraft =
+          previous[currentQuestion.key] ?? createEmptyScavengerAnswerDraft()
+        const nextDraft = normalizeScavengerDraft(updater(currentDraft))
+
+        if (areScavengerDraftsEqual(currentDraft, nextDraft)) {
+          return previous
+        }
+
+        const next = {
+          ...previous,
+          [currentQuestion.key]: nextDraft,
+        }
+        answersByQuestionRef.current = next
+        queueScavengerAutosave(currentQuestion, nextDraft)
+        return next
+      })
+    },
+    [currentQuestion, queueScavengerAutosave],
+  )
+
+  const handleResponseChange = useCallback(
+    (nextAnswer: string) => {
+      updateCurrentQuestionDraft((draft) => ({
+        ...draft,
+        answer: nextAnswer,
+      }))
+    },
+    [updateCurrentQuestionDraft],
+  )
+
+  const selectRow = useCallback(
+    (rowId: string) => {
+      setSelectedRow(rowId)
+      updateCurrentQuestionDraft((draft) => ({
+        ...draft,
+        selectedLineIds: [rowId],
+      }))
+    },
+    [updateCurrentQuestionDraft],
+  )
 
   const selectedRows = useMemo(
     () => transcriptRows.filter((row) => checkedRows[row.id]),
@@ -883,20 +1252,140 @@ export default function ScavengerHuntPage() {
           .filter((line) => Number.isFinite(line))
           .join(', ')
       : 'None'
+  const hasInstructionCards = instructionCards.length > 0
+  const activeInstructionCard = hasInstructionCards
+    ? instructionCards[Math.min(activeInstructionSlideIndex, instructionCards.length - 1)] ?? null
+    : null
 
   const handleBackToWorkspace = () => {
     router.push('/workspace')
   }
 
+  const handleMarkScavengerComplete = useCallback(
+    async (completed: boolean) => {
+      if (isMarkingScavengerComplete) return
+
+      const transcriptId = transcriptMeta?.id ?? requestedTranscriptId
+      if (!transcriptId) {
+        setScavengerCompletionError('Select a transcript before updating the status.')
+        return
+      }
+
+      setIsMarkingScavengerComplete(true)
+      setScavengerCompletionError(null)
+
+      try {
+        const response = await fetch(
+          `/api/annotator/transcripts/${encodeURIComponent(
+            transcriptId,
+          )}/scavenger-hunt?transcriptId=${encodeURIComponent(transcriptId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ completed }),
+          },
+        )
+        const payload: UpdateScavengerCompletionResponse | null = await response
+          .json()
+          .catch(() => null)
+
+        if (!response.ok || !payload?.success) {
+          const message =
+            payload?.error ?? 'Unable to update scavenger completion status.'
+          throw new Error(message)
+        }
+
+        const nextCompleted =
+          typeof payload.completed === 'boolean' ? payload.completed : completed
+        setTranscriptMeta((previous) =>
+          previous ? { ...previous, scavengerCompleted: nextCompleted } : previous,
+        )
+        triggerSavedBadge()
+      } catch (error) {
+        console.error('Failed to update scavenger completion status', error)
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to update scavenger completion status.'
+        setScavengerCompletionError(message)
+      } finally {
+        setIsMarkingScavengerComplete(false)
+      }
+    },
+    [
+      isMarkingScavengerComplete,
+      requestedTranscriptId,
+      transcriptMeta?.id,
+      triggerSavedBadge,
+    ],
+  )
+
+  const handleMenuLinkAction = useCallback(
+    (link: { id: string }) => {
+      if (link.id === 'complete') {
+        void handleMarkScavengerComplete(!isScavengerComplete)
+        return
+      }
+
+      if (link.id === 'annotations') {
+        const transcriptId = transcriptMeta?.id ?? requestedTranscriptId
+        const nextPath = transcriptId
+          ? `/annotate?transcript=${encodeURIComponent(transcriptId)}`
+          : '/annotate'
+        router.push(nextPath)
+      }
+    },
+    [
+      handleMarkScavengerComplete,
+      isScavengerComplete,
+      requestedTranscriptId,
+      router,
+      transcriptMeta?.id,
+    ],
+  )
+
+  const closeLessonResourcesModal = useCallback(() => {
+    setIsLessonResourcesModalOpen(false)
+  }, [])
+
+  const showPreviousInstructionSlide = useCallback(() => {
+    if (instructionCards.length <= 1) return
+    setActiveInstructionSlideIndex((currentIndex) =>
+      currentIndex > 0 ? currentIndex - 1 : instructionCards.length - 1,
+    )
+  }, [instructionCards.length])
+
+  const showNextInstructionSlide = useCallback(() => {
+    if (instructionCards.length <= 1) return
+    setActiveInstructionSlideIndex((currentIndex) =>
+      currentIndex < instructionCards.length - 1 ? currentIndex + 1 : 0,
+    )
+  }, [instructionCards.length])
+
   const handleLessonResourcesClick = () => {
-    setLessonResourceSlideIndex(0)
+    const transcriptId = transcriptMeta?.id ?? requestedTranscriptId
+    if (transcriptId) {
+      void loadInstructionalMaterials(transcriptId)
+    } else {
+      setInstructionCards([])
+      setInstructionCardsError('Select a transcript to load lesson resources.')
+      setInstructionalMaterialLink(null)
+      setIsLoadingInstructionCards(false)
+      setActiveInstructionSlideIndex(0)
+    }
     setIsLessonResourcesModalOpen(true)
   }
 
   const markRowCheckedDuringDrag = (rowId: string) => {
-    setCheckedRows((previous) =>
-      previous[rowId] ? previous : { ...previous, [rowId]: true },
-    )
+    updateCurrentQuestionDraft((draft) => {
+      if (draft.selectedLineIds.includes(rowId)) {
+        return draft
+      }
+      return {
+        ...draft,
+        selectedLineIds: [...draft.selectedLineIds, rowId],
+      }
+    })
   }
 
   const startDragSelection = (rowId: string) => {
@@ -958,14 +1447,14 @@ export default function ScavengerHuntPage() {
   }
 
   const toggleRowCheckbox = (rowId: string) => {
-    setCheckedRows((previous) => {
-      const next = { ...previous }
-      if (next[rowId]) {
-        delete next[rowId]
-      } else {
-        next[rowId] = true
+    updateCurrentQuestionDraft((draft) => {
+      const isSelected = draft.selectedLineIds.includes(rowId)
+      return {
+        ...draft,
+        selectedLineIds: isSelected
+          ? draft.selectedLineIds.filter((lineId) => lineId !== rowId)
+          : [...draft.selectedLineIds, rowId],
       }
-      return next
     })
   }
 
@@ -1014,47 +1503,19 @@ export default function ScavengerHuntPage() {
     )
   }, [])
 
+  const handleUserNoteBadgeToggle = useCallback((noteId: string) => {
+    setExpandedUserNotes((previous) => ({
+      ...previous,
+      [noteId]: !previous[noteId],
+    }))
+  }, [])
+
   const handleLlmNoteBadgeToggle = useCallback((noteId: string) => {
     setExpandedLlmNotes((previous) => ({
       ...previous,
       [noteId]: !previous[noteId],
     }))
   }, [])
-
-  const closeLessonResourcesModal = useCallback(() => {
-    setIsLessonResourcesModalOpen(false)
-  }, [])
-
-  const lessonResourceSlides = useMemo(
-    () => [
-      {
-        id: 'instruction-context',
-        kind: 'instruction' as const,
-      },
-      ...instructionCards.map((card) => ({
-        id: card.id,
-        kind: 'material' as const,
-        card,
-      })),
-    ],
-    [instructionCards],
-  )
-
-  const activeLessonResourceSlide =
-    lessonResourceSlides[lessonResourceSlideIndex] ?? lessonResourceSlides[0]
-
-  const goToLessonResourceSlide = useCallback(
-    (direction: -1 | 1) => {
-      setLessonResourceSlideIndex((currentIndex) => {
-        const nextIndex = currentIndex + direction
-        if (nextIndex < 0 || nextIndex >= lessonResourceSlides.length) {
-          return currentIndex
-        }
-        return nextIndex
-      })
-    },
-    [lessonResourceSlides.length],
-  )
 
   const handleVideoPlayClick = () => {
     const videoElement = videoRef.current
@@ -1180,52 +1641,60 @@ export default function ScavengerHuntPage() {
         throw new Error(message)
       }
 
-      const normalized = (payload.items ?? []).map((item) => ({
-        id: item.id,
-        title: item.image_title?.trim() ?? '',
-        imageUrl: item.url,
-        description: item.description ?? null,
-      }))
-
-      if (activeTranscriptFetchRef.current !== transcriptId) {
+      const activeTranscriptId =
+        activeTranscriptFetchRef.current ?? transcriptMeta?.id ?? requestedTranscriptId
+      if (activeTranscriptId && activeTranscriptId !== transcriptId) {
         return
       }
+
+      const normalized = (payload.items ?? [])
+        .map((item) => ({
+          id: item.id,
+          title: item.image_title?.trim() ?? '',
+          imageUrl: item.url,
+          description: item.description ?? null,
+        }))
+        .filter((item) => Boolean(item.imageUrl))
 
       setInstructionCards(normalized)
       setInstructionalMaterialLink(payload.instructional_material_link ?? null)
+      setActiveInstructionSlideIndex(0)
     } catch (error) {
       console.error('Failed to load instructional materials', error)
-      if (activeTranscriptFetchRef.current !== transcriptId) {
-        return
-      }
       setInstructionCards([])
       setInstructionalMaterialLink(null)
+      setActiveInstructionSlideIndex(0)
       const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to load instructional materials.'
+        error instanceof Error ? error.message : 'Unable to load instructional materials.'
       setInstructionCardsError(message)
     } finally {
-      if (activeTranscriptFetchRef.current === transcriptId) {
-        setIsLoadingInstructionCards(false)
-      }
+      setIsLoadingInstructionCards(false)
     }
-  }, [])
+  }, [requestedTranscriptId, transcriptMeta?.id])
 
   const loadScavengerData = useCallback(async (transcriptId: string) => {
+    const defaultQuestions = createDefaultScavengerQuestions()
+    const defaultDrafts = buildScavengerDraftMap(defaultQuestions)
+
     activeTranscriptFetchRef.current = transcriptId
+    clearScavengerAutosaveState()
     setIsLoadingTranscript(true)
     setTranscriptError(null)
     setNotesError(null)
+    setScavengerCompletionError(null)
     setInstructionCards([])
+    setIsLoadingInstructionCards(false)
     setInstructionCardsError(null)
     setInstructionalMaterialLink(null)
-    setIsLoadingInstructionCards(false)
+    setActiveInstructionSlideIndex(0)
     setIsLessonResourcesModalOpen(false)
-    setLessonResourceSlideIndex(0)
     setVideoSource(null)
     setVideoSourceError(null)
-    setQuestionPrompts(DEFAULT_QUESTION_PROMPTS)
+    setScavengerQuestions(defaultQuestions)
+    setAnswersByQuestionKey(defaultDrafts)
+    answersByQuestionRef.current = defaultDrafts
+    savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
+    setQuestionIndex(0)
 
     try {
       const transcriptResponse = await fetch(
@@ -1287,7 +1756,6 @@ export default function ScavengerHuntPage() {
           return acc
         }, {} as Record<string, boolean>),
       )
-      setCheckedRows({})
       setSelectedRow(initialRows[0]?.id ?? null)
       setActiveSegmentIndex(0)
       setActivePlaybackRowId(null)
@@ -1299,8 +1767,6 @@ export default function ScavengerHuntPage() {
       setShowVideoControls(false)
       setShowVideoPlayOverlay(true)
       setIsVideoPlaying(false)
-
-      loadInstructionalMaterials(transcriptId)
 
       try {
         const notesResponse = await fetch(
@@ -1383,7 +1849,7 @@ export default function ScavengerHuntPage() {
 
       try {
         const questionsResponse = await fetch(
-          `/api/admin/transcripts/${encodeURIComponent(
+          `/api/annotator/transcripts/${encodeURIComponent(
             transcriptId,
           )}/scavenger-hunt?transcriptId=${encodeURIComponent(transcriptId)}`,
         )
@@ -1395,15 +1861,83 @@ export default function ScavengerHuntPage() {
         }
 
         if (questionsResponse.ok && questionsPayload?.success) {
-          const fetchedQuestions = (questionsPayload.scavengerHunt?.questions ?? [])
-            .map((item) => item.question?.trim())
-            .filter((question): question is string => Boolean(question))
+          if (typeof questionsPayload.scavengerCompleted === 'boolean') {
+            setTranscriptMeta((previous) =>
+              previous
+                ? {
+                    ...previous,
+                    scavengerCompleted: questionsPayload.scavengerCompleted,
+                  }
+                : previous,
+            )
+          }
 
-          if (fetchedQuestions.length > 0) {
-            setQuestionPrompts(fetchedQuestions)
+          const fetchedQuestions = questionsPayload.scavengerHunt?.questions ?? []
+          const normalizedQuestions = fetchedQuestions
+            .map((question, index) => {
+              const questionId = question.id?.trim() ?? ''
+              const prompt = question.question?.trim() ?? ''
+              if (!questionId || !prompt) {
+                return null
+              }
+
+              return {
+                key: createScavengerQuestionKey(questionId, index),
+                id: questionId,
+                prompt,
+                orderIndex:
+                  typeof question.orderIndex === 'number' &&
+                  Number.isFinite(question.orderIndex)
+                    ? question.orderIndex
+                    : index + 1,
+              } satisfies ScavengerQuestion
+            })
+            .filter((question): question is ScavengerQuestion => question !== null)
+            .sort((questionA, questionB) => questionA.orderIndex - questionB.orderIndex)
+
+          if (normalizedQuestions.length > 0) {
+            const fetchedQuestionsById = fetchedQuestions.reduce(
+              (acc, question) => {
+                const questionId = question.id?.trim() ?? ''
+                if (questionId) {
+                  acc[questionId] = question
+                }
+                return acc
+              },
+              {} as Record<string, (typeof fetchedQuestions)[number]>,
+            )
+
+            const nextDrafts = normalizedQuestions.reduce(
+              (acc, question) => {
+                const payloadQuestion =
+                  question.id ? fetchedQuestionsById[question.id] : undefined
+                const rawAnswer = payloadQuestion?.answer
+                const selectedLineIds = Array.isArray(payloadQuestion?.selectedLineIds)
+                  ? payloadQuestion.selectedLineIds.filter(
+                      (lineId): lineId is string => typeof lineId === 'string',
+                    )
+                  : []
+
+                acc[question.key] = normalizeScavengerDraft({
+                  answer: typeof rawAnswer === 'string' ? rawAnswer : '',
+                  selectedLineIds,
+                })
+
+                return acc
+              },
+              {} as Record<string, ScavengerAnswerDraft>,
+            )
+
+            setScavengerQuestions(normalizedQuestions)
+            setAnswersByQuestionKey(nextDrafts)
+            answersByQuestionRef.current = nextDrafts
+            savedAnswersByQuestionRef.current = cloneScavengerDraftMap(nextDrafts)
             setQuestionIndex(0)
           } else {
-            setQuestionPrompts(DEFAULT_QUESTION_PROMPTS)
+            setScavengerQuestions(defaultQuestions)
+            setAnswersByQuestionKey(defaultDrafts)
+            answersByQuestionRef.current = defaultDrafts
+            savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
             setQuestionIndex(0)
           }
         }
@@ -1454,7 +1988,6 @@ export default function ScavengerHuntPage() {
       setTranscriptRows([])
       setTranscriptSegments([])
       setSelectedRow(null)
-      setCheckedRows({})
       setRowFlags({})
       setUserNotes([])
       setLlmNotes([])
@@ -1464,15 +1997,18 @@ export default function ScavengerHuntPage() {
       setExpandedUserNotes({})
       setExpandedLlmNotes({})
       setInstructionCards([])
+      setIsLoadingInstructionCards(false)
       setInstructionCardsError(null)
       setInstructionalMaterialLink(null)
-      setIsLoadingInstructionCards(false)
+      setActiveInstructionSlideIndex(0)
       setIsLessonResourcesModalOpen(false)
-      setLessonResourceSlideIndex(0)
       setTimelineNoteFilter(null)
       setVideoSource(null)
       setVideoSourceError(null)
-      setQuestionPrompts(DEFAULT_QUESTION_PROMPTS)
+      setScavengerQuestions(defaultQuestions)
+      setAnswersByQuestionKey(defaultDrafts)
+      answersByQuestionRef.current = defaultDrafts
+      savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
       setQuestionIndex(0)
       setSegmentPlaybackTime(0)
       setHasPlayedOnce(false)
@@ -1488,33 +2024,34 @@ export default function ScavengerHuntPage() {
         setIsLoadingTranscript(false)
       }
     }
-  }, [loadInstructionalMaterials])
+  }, [clearScavengerAutosaveState])
 
   useEffect(() => {
-    if (questionPrompts.length === 0) {
+    answersByQuestionRef.current = answersByQuestionKey
+  }, [answersByQuestionKey])
+
+  useEffect(() => {
+    if (scavengerQuestions.length === 0) {
       setQuestionIndex(0)
       return
     }
 
     setQuestionIndex((index) =>
-      Math.min(index, Math.max(questionPrompts.length - 1, 0)),
+      Math.min(index, Math.max(scavengerQuestions.length - 1, 0)),
     )
-  }, [questionPrompts.length])
-
-  useEffect(() => {
-    setLessonResourceSlideIndex((index) =>
-      Math.min(index, Math.max(lessonResourceSlides.length - 1, 0)),
-    )
-  }, [lessonResourceSlides.length])
+  }, [scavengerQuestions.length])
 
   useEffect(() => {
     if (!requestedTranscriptId) {
+      const defaultQuestions = createDefaultScavengerQuestions()
+      const defaultDrafts = buildScavengerDraftMap(defaultQuestions)
+
       activeTranscriptFetchRef.current = null
+      clearScavengerAutosaveState()
       setTranscriptMeta(null)
       setTranscriptRows([])
       setTranscriptSegments([])
       setSelectedRow(null)
-      setCheckedRows({})
       setRowFlags({})
       setUserNotes([])
       setLlmNotes([])
@@ -1524,15 +2061,18 @@ export default function ScavengerHuntPage() {
       setExpandedUserNotes({})
       setExpandedLlmNotes({})
       setInstructionCards([])
+      setIsLoadingInstructionCards(false)
       setInstructionCardsError(null)
       setInstructionalMaterialLink(null)
-      setIsLoadingInstructionCards(false)
+      setActiveInstructionSlideIndex(0)
+      setIsLessonResourcesModalOpen(false)
       setVideoSource(null)
       setVideoSourceError(null)
-      setQuestionPrompts(DEFAULT_QUESTION_PROMPTS)
+      setScavengerQuestions(defaultQuestions)
+      setAnswersByQuestionKey(defaultDrafts)
+      answersByQuestionRef.current = defaultDrafts
+      savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
       setQuestionIndex(0)
-      setIsLessonResourcesModalOpen(false)
-      setLessonResourceSlideIndex(0)
       setIsLoadingTranscript(false)
       setNotesError(null)
       setTranscriptError('Open Scavenger Hunt from Annotate so a transcript can be loaded.')
@@ -1540,12 +2080,25 @@ export default function ScavengerHuntPage() {
     }
 
     loadScavengerData(requestedTranscriptId)
-  }, [loadScavengerData, requestedTranscriptId])
+  }, [clearScavengerAutosaveState, loadScavengerData, requestedTranscriptId])
 
   useEffect(() => {
     return () => {
       if (transcriptScrollbarTimeout.current) {
         window.clearTimeout(transcriptScrollbarTimeout.current)
+      }
+      Object.values(autosaveTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId)
+      })
+      autosaveTimeoutsRef.current = {}
+
+      Object.values(autosaveAbortControllersRef.current).forEach((controller) => {
+        controller.abort()
+      })
+      autosaveAbortControllersRef.current = {}
+      if (savedBadgeTimeout.current) {
+        window.clearTimeout(savedBadgeTimeout.current)
+        savedBadgeTimeout.current = undefined
       }
     }
   }, [])
@@ -1592,6 +2145,15 @@ export default function ScavengerHuntPage() {
   }, [timelineSettingsOpen])
 
   useEffect(() => {
+    setActiveInstructionSlideIndex((currentIndex) => {
+      if (instructionCards.length === 0) {
+        return 0
+      }
+      return Math.min(currentIndex, instructionCards.length - 1)
+    })
+  }, [instructionCards.length])
+
+  useEffect(() => {
     if (!isLessonResourcesModalOpen) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1599,14 +2161,14 @@ export default function ScavengerHuntPage() {
         closeLessonResourcesModal()
         return
       }
-
-      if (event.key === 'ArrowRight') {
-        goToLessonResourceSlide(1)
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        showPreviousInstructionSlide()
         return
       }
-
-      if (event.key === 'ArrowLeft') {
-        goToLessonResourceSlide(-1)
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        showNextInstructionSlide()
       }
     }
 
@@ -1620,8 +2182,9 @@ export default function ScavengerHuntPage() {
     }
   }, [
     closeLessonResourcesModal,
-    goToLessonResourceSlide,
     isLessonResourcesModalOpen,
+    showNextInstructionSlide,
+    showPreviousInstructionSlide,
   ])
 
   useEffect(() => {
@@ -1807,8 +2370,19 @@ export default function ScavengerHuntPage() {
     playbackRowRef.current = null
   }, [activeSegmentRows, hasMultipleSegments])
 
+  useEffect(() => {
+    const selectedLineId = currentQuestionDraft.selectedLineIds[0] ?? null
+    if (!selectedLineId) {
+      return
+    }
+
+    setSelectedRow((currentSelectedRow) =>
+      currentSelectedRow === selectedLineId ? currentSelectedRow : selectedLineId,
+    )
+  }, [currentQuestionDraft.selectedLineIds])
+
   const currentQuestionPrompt =
-    questionPrompts[questionIndex] ?? 'No scavenger hunt question is available yet.'
+    currentQuestion?.prompt ?? 'No scavenger hunt question is available yet.'
 
   return (
     <div
@@ -1822,6 +2396,8 @@ export default function ScavengerHuntPage() {
           onWorkspaceClick={handleBackToWorkspace}
           showWorkspaceButton
           showToolbarToggleButton={false}
+          menuLinks={scavengerMenuLinks}
+          onMenuLinkClick={handleMenuLinkAction}
           variant="minimal"
           density="compact"
           workspaceButtonVariant="icon"
@@ -1833,22 +2409,26 @@ export default function ScavengerHuntPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xl font-semibold text-slate-900">
-                  Question {questionPrompts.length > 0 ? questionIndex + 1 : 0}
+                  Question {scavengerQuestions.length > 0 ? questionIndex + 1 : 0}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {showSavedBadge && (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    Saved
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={handleLessonResourcesClick}
-                  disabled={!transcriptMeta || isLoadingTranscript}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-600 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-600 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                 >
                   Lesson Resources
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuestionIndex((index) => Math.max(0, index - 1))}
-                  disabled={questionIndex === 0 || questionPrompts.length === 0}
+                  disabled={questionIndex === 0 || scavengerQuestions.length === 0}
                   className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Previous question"
                 >
@@ -1858,12 +2438,12 @@ export default function ScavengerHuntPage() {
                   type="button"
                   onClick={() =>
                     setQuestionIndex((index) =>
-                      Math.min(questionPrompts.length - 1, index + 1),
+                      Math.min(scavengerQuestions.length - 1, index + 1),
                     )
                   }
                   disabled={
-                    questionPrompts.length === 0 ||
-                    questionIndex === questionPrompts.length - 1
+                    scavengerQuestions.length === 0 ||
+                    questionIndex === scavengerQuestions.length - 1
                   }
                   className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Next question"
@@ -1885,13 +2465,18 @@ export default function ScavengerHuntPage() {
             <textarea
               id="scavenger-response"
               value={response}
-              onChange={(event) => setResponse(event.target.value)}
+              onChange={(event) => handleResponseChange(event.target.value)}
               rows={4}
               placeholder="Write comparative analysis"
               className="mt-4 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-300 focus:bg-white"
             />
 
-            {(transcriptError || notesError) && (
+            {(
+              transcriptError ||
+              notesError ||
+              scavengerAutosaveError ||
+              scavengerCompletionError
+            ) && (
               <div className="mt-3 space-y-2">
                 {transcriptError && (
                   <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700">
@@ -1901,6 +2486,16 @@ export default function ScavengerHuntPage() {
                 {notesError && (
                   <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
                     {notesError}
+                  </p>
+                )}
+                {scavengerAutosaveError && (
+                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                    {scavengerAutosaveError}
+                  </p>
+                )}
+                {scavengerCompletionError && (
+                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                    {scavengerCompletionError}
                   </p>
                 )}
               </div>
@@ -2430,30 +3025,30 @@ export default function ScavengerHuntPage() {
                                     )
                                   }
 
-                                  const isTimelineNoteActive =
-                                    timelineNoteFilter === note.id
+                                  const isUserNoteExpanded =
+                                    expandedUserNotes[note.id] ?? false
                                   return (
                                     <button
                                       key={note.id}
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation()
-                                        handleTimelineNoteSelect(note.id)
+                                        handleUserNoteBadgeToggle(note.id)
                                       }}
                                       onMouseDown={(event) => event.stopPropagation()}
                                       onMouseUp={(event) => event.stopPropagation()}
                                       onDoubleClick={(event) =>
                                         event.stopPropagation()
                                       }
-                                      aria-pressed={isTimelineNoteActive}
+                                      aria-expanded={isUserNoteExpanded}
                                       title={
-                                        isTimelineNoteActive
-                                          ? `Hide "${note.label}" highlight`
-                                          : `Show "${note.label}" highlight`
+                                        isUserNoteExpanded
+                                          ? `Collapse "${note.label}" details`
+                                          : `Expand "${note.label}" details`
                                       }
                                       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold shadow-sm transition ${
-                                        isTimelineNoteActive
-                                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700 shadow-indigo-100'
+                                        isUserNoteExpanded
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 shadow-emerald-100'
                                           : 'border-slate-200 bg-white/80 text-slate-700 shadow-slate-100'
                                       }`}
                                     >
@@ -2522,12 +3117,7 @@ export default function ScavengerHuntPage() {
             notes={userNotes}
             badgeTone="emerald"
             expandedNotes={expandedUserNotes}
-            onToggleExpanded={(noteId) =>
-              setExpandedUserNotes((previous) => ({
-                ...previous,
-                [noteId]: !previous[noteId],
-              }))
-            }
+            onToggleExpanded={handleUserNoteBadgeToggle}
             emptyState="No personal notes were found for this transcript."
           />
 
@@ -2537,12 +3127,7 @@ export default function ScavengerHuntPage() {
             notes={shouldShowLlmAnnotations ? llmNotes : []}
             badgeTone="indigo"
             expandedNotes={expandedLlmNotes}
-            onToggleExpanded={(noteId) =>
-              setExpandedLlmNotes((previous) => ({
-                ...previous,
-                [noteId]: !previous[noteId],
-              }))
-            }
+            onToggleExpanded={handleLlmNoteBadgeToggle}
             emptyState={
               shouldShowLlmAnnotations
                 ? 'No LLM notes were found for this transcript.'
@@ -2551,27 +3136,26 @@ export default function ScavengerHuntPage() {
           />
         </section>
       </div>
-
       {isLessonResourcesModalOpen && (
         <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/70 px-4 py-8 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/70 px-4 py-8 backdrop-blur-sm"
           onClick={closeLessonResourcesModal}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Lesson resources"
-            className="w-full max-w-5xl rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-2xl shadow-slate-900/30"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/30"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                <p className="text-xs uppercase tracking-widest text-slate-500">
                   Lesson resources
                 </p>
-                <p className="text-lg font-semibold text-slate-900">
-                  {transcriptMeta?.title ?? 'Scavenger hunt'}
-                </p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {transcriptMeta?.title ?? 'Transcript resources'}
+                </h2>
               </div>
               <button
                 type="button"
@@ -2582,114 +3166,101 @@ export default function ScavengerHuntPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-2">
-              {activeLessonResourceSlide?.kind === 'instruction' ? (
-                <div className="max-h-[72vh] space-y-3 overflow-y-auto rounded-xl bg-white p-5">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <div className="stealth-scrollbar flex-1 overflow-y-auto px-6 py-6">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
                     Instruction & context
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                    {transcriptMeta?.instructionContext?.trim()
-                      ? transcriptMeta.instructionContext
-                      : 'No instructional context has been provided for this transcript yet.'}
-                  </p>
-                  {instructionalMaterialLink?.trim() && (
-                    <a
-                      href={instructionalMaterialLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
-                    >
-                      Open external instructional link
-                    </a>
-                  )}
-                </div>
-              ) : activeLessonResourceSlide?.kind === 'material' ? (
-                <div className="max-h-[72vh] overflow-y-auto rounded-xl bg-white p-4">
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                    <Image
-                      src={activeLessonResourceSlide.card.imageUrl}
-                      alt={
-                        activeLessonResourceSlide.card.title ||
-                        'Instructional material image'
-                      }
-                      width={1440}
-                      height={900}
-                      className="mx-auto h-auto max-h-[56vh] w-full object-contain"
-                      sizes="(min-width: 1024px) 1024px, 100vw"
-                    />
+                  </h3>
+                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                      {transcriptMeta?.instructionContext?.trim()
+                        ? transcriptMeta.instructionContext
+                        : 'No instructional context has been provided for this transcript yet.'}
+                    </p>
+                    {instructionalMaterialLink?.trim() && (
+                      <a
+                        href={instructionalMaterialLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                      >
+                        Open external instructional link
+                      </a>
+                    )}
                   </div>
-                  {(activeLessonResourceSlide.card.title ||
-                    activeLessonResourceSlide.card.description) && (
-                    <div className="mt-3 space-y-1">
-                      {activeLessonResourceSlide.card.title && (
-                        <p className="text-base font-semibold text-slate-900">
-                          {activeLessonResourceSlide.card.title}
-                        </p>
-                      )}
-                      {activeLessonResourceSlide.card.description && (
-                        <p className="text-sm leading-relaxed text-slate-600">
-                          {activeLessonResourceSlide.card.description}
-                        </p>
-                      )}
+                </section>
+
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
+                      Instructional materials
+                    </h3>
+                    {hasInstructionCards && (
+                      <span className="text-xs font-semibold text-slate-500">
+                        {activeInstructionSlideIndex + 1} of {instructionCards.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {isLoadingInstructionCards ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-500">
+                      Loading instructional materials...
+                    </div>
+                  ) : hasInstructionCards && activeInstructionCard ? (
+                    <div className="space-y-3">
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                        <Image
+                          src={activeInstructionCard.imageUrl}
+                          alt={
+                            activeInstructionCard.title ||
+                            `Instructional material ${activeInstructionSlideIndex + 1}`
+                          }
+                          width={1280}
+                          height={720}
+                          className="h-[min(58vh,460px)] w-full object-contain"
+                          sizes="(min-width: 1024px) 720px, 100vw"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+                        <button
+                          type="button"
+                          onClick={showPreviousInstructionSlide}
+                          disabled={instructionCards.length <= 1}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="Previous instructional material"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <div className="min-w-0 flex-1 text-center">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {activeInstructionCard.title ||
+                              `Instructional material ${activeInstructionSlideIndex + 1}`}
+                          </p>
+                          {activeInstructionCard.description?.trim() && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {activeInstructionCard.description}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={showNextInstructionSlide}
+                          disabled={instructionCards.length <= 1}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="Next instructional material"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-500">
+                      {instructionCardsError ?? 'No instructional materials have been uploaded yet.'}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="rounded-xl bg-white p-5 text-sm text-slate-500">
-                  {isLoadingInstructionCards
-                    ? 'Loading instructional materials...'
-                    : instructionCardsError ??
-                      'No instructional materials have been uploaded yet.'}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
-                Slide {lessonResourceSlideIndex + 1} of {lessonResourceSlides.length}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => goToLessonResourceSlide(-1)}
-                  disabled={lessonResourceSlideIndex === 0}
-                  className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Previous lesson resource slide"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goToLessonResourceSlide(1)}
-                  disabled={lessonResourceSlideIndex === lessonResourceSlides.length - 1}
-                  className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Next lesson resource slide"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                </section>
               </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {lessonResourceSlides.map((slide, index) => {
-                const isActive = index === lessonResourceSlideIndex
-                return (
-                  <button
-                    key={slide.id}
-                    type="button"
-                    onClick={() => setLessonResourceSlideIndex(index)}
-                    className={`h-2.5 rounded-full transition ${
-                      isActive
-                        ? 'w-7 bg-indigo-500'
-                        : 'w-2.5 bg-slate-300 hover:bg-slate-400'
-                    }`}
-                    aria-label={`Go to slide ${index + 1}`}
-                    aria-current={isActive ? 'true' : undefined}
-                  />
-                )
-              })}
             </div>
           </div>
         </div>

@@ -160,6 +160,7 @@ export async function GET(request: Request, context: RouteContext) {
         },
         select: {
           scavenger_visibility_admin: true,
+          scavenger_completed: true,
         },
       }),
     ])
@@ -185,6 +186,7 @@ export async function GET(request: Request, context: RouteContext) {
         llmAnnotationVisibilityAdmin: annotation.llm_annotation_visibility_admin,
         scavengerVisibilityAdmin:
           scavengerAssignment?.scavenger_visibility_admin ?? 'hidden',
+        scavengerCompleted: Boolean(scavengerAssignment?.scavenger_completed),
         lastUpdated:
           latestAssignment?.createdAt?.toISOString?.() ??
           null,
