@@ -3200,7 +3200,7 @@ function AnnotationPageContent() {
               )}
               <div
                 ref={transcriptScrollRef}
-                className={`stealth-scrollbar relative flex-1 min-w-0 overflow-auto rounded-2xl border border-slate-100 bg-white/70 p-2 ${
+                className={`stealth-scrollbar stealth-scrollbar--overlay relative flex-1 min-w-0 overflow-auto rounded-2xl border border-slate-100 bg-white/70 p-2 pr-0.5 ${
                   showTranscriptScrollbar ? 'stealth-scrollbar--active' : ''
                 } ${isDragSelecting ? 'select-none' : ''}`}
               >
