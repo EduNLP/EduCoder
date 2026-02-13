@@ -529,6 +529,7 @@ function AnnotationPageContent() {
   const [expandedLlmNotes, setExpandedLlmNotes] = useState<
     Record<string, boolean>
   >({})
+  const [editableNotes, setEditableNotes] = useState<Record<string, boolean>>({})
   const [noteDetailsDrafts, setNoteDetailsDrafts] = useState<
     Record<string, string[]>
   >({})
@@ -1926,11 +1927,28 @@ function AnnotationPageContent() {
     }, 2200)
   }
 
+  const clearNoteEditing = (noteId: string) => {
+    setEditableNotes((prev) => {
+      if (!prev[noteId]) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[noteId]
+      return next
+    })
+  }
+
   const toggleNoteDetails = (noteId: string) => {
-    setExpandedNotes((prev) => ({
-      ...prev,
-      [noteId]: !prev[noteId],
-    }))
+    setExpandedNotes((prev) => {
+      const nextExpanded = !prev[noteId]
+      if (!nextExpanded) {
+        clearNoteEditing(noteId)
+      }
+      return {
+        ...prev,
+        [noteId]: nextExpanded,
+      }
+    })
   }
 
   const handleNoteDescriptionChange = (
@@ -2034,6 +2052,7 @@ function AnnotationPageContent() {
         delete next[noteId]
         return next
       })
+      clearNoteEditing(noteId)
       setRowAssignedNotes((prev) => {
         let didChange = false
         const nextAssignments: Record<string, Record<string, boolean>> = {}
@@ -2254,6 +2273,7 @@ function AnnotationPageContent() {
       nextDetails[2] !== (note.q3 ?? '').trim()
 
     if (!didChange) {
+      clearNoteEditing(noteId)
       triggerSavedBadge()
       return
     }
@@ -2315,6 +2335,7 @@ function AnnotationPageContent() {
         ...prev,
         [noteId]: [updatedNote.q1, updatedNote.q2, updatedNote.q3],
       }))
+      clearNoteEditing(noteId)
       triggerSavedBadge()
     } catch (error) {
       console.error('Failed to update note', error)
@@ -3705,6 +3726,7 @@ function AnnotationPageContent() {
                                 const isNoteActive = noteState.checked
                                 const isNoteMixed = noteState.indeterminate
                                 const isExpanded = expandedNotes[note.id] ?? false
+                                const isEditing = editableNotes[note.id] ?? false
                                 const noteDetailsValues =
                                   noteDetailsDrafts[note.id] ??
                                   createNoteContentFields()
@@ -3778,14 +3800,18 @@ function AnnotationPageContent() {
                                           <input
                                             type="text"
                                             value={noteTitleValue}
+                                            readOnly={!isEditing}
                                             onChange={(event) =>
                                               handleNoteTitleChange(
                                                 note.id,
                                                 event.target.value,
                                               )
                                             }
-                                            onBlur={triggerSavedBadge}
-                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none"
+                                            className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
+                                              isEditing
+                                                ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
+                                                : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
+                                            }`}
                                             placeholder="Add a note title"
                                           />
                                         </div>
@@ -3800,6 +3826,7 @@ function AnnotationPageContent() {
                                               </p>
                                               <textarea
                                                 value={noteDetailsValues[fieldIndex] ?? ''}
+                                                readOnly={!isEditing}
                                                 onChange={(event) =>
                                                   handleNoteDescriptionChange(
                                                     note.id,
@@ -3807,9 +3834,12 @@ function AnnotationPageContent() {
                                                     event.target.value,
                                                   )
                                                 }
-                                                onBlur={triggerSavedBadge}
                                                 rows={3}
-                                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none"
+                                                className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
+                                                  isEditing
+                                                    ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
+                                                    : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
+                                                }`}
                                                 placeholder={field.placeholder}
                                               />
                                             </div>
@@ -3827,13 +3857,24 @@ function AnnotationPageContent() {
                                           </button>
                                           <button
                                             type="button"
-                                            onClick={() => handleSaveNoteChanges(note.id)}
+                                            onClick={() => {
+                                              if (isEditing) {
+                                                void handleSaveNoteChanges(note.id)
+                                                return
+                                              }
+                                              setEditableNotes((prev) => ({
+                                                ...prev,
+                                                [note.id]: true,
+                                              }))
+                                            }}
                                             disabled={Boolean(savingNoteIds[note.id])}
                                             className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
                                           >
                                             {savingNoteIds[note.id]
                                               ? 'Saving...'
-                                              : 'Save changes'}
+                                              : isEditing
+                                                ? 'Save Changes'
+                                                : 'Edit'}
                                           </button>
                                         </div>
                                         {noteSaveErrors[note.id] && (
