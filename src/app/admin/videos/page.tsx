@@ -1,15 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Search, Upload, Video } from 'lucide-react'
-
-type SectionVideo = {
-  id: string
-  file_name: string
-  mime_type: string | null
-  gcs_path: string
-  uploaded_at: string
-}
+import { useAdminVideoUpload, type SectionVideo } from '@/context/AdminVideoUploadContext'
 
 type TranscriptRecord = {
   id: string
@@ -22,24 +15,6 @@ type TranscriptRecord = {
 type VideosResponse = {
   success: boolean
   transcripts?: TranscriptRecord[]
-  error?: string
-}
-
-type UploadResponse = {
-  success: boolean
-  transcriptId?: string
-  video?: SectionVideo
-  error?: string
-}
-
-type SignedUploadResponse = {
-  success: boolean
-  uploadUrl?: string
-  objectPath?: string
-  gcsPath?: string
-  publicUrl?: string
-  requiredHeaders?: Record<string, string>
-  expiresAt?: string
   error?: string
 }
 
@@ -68,14 +43,29 @@ export default function VideosPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [uploadingSections, setUploadingSections] = useState<Set<string>>(
-    () => new Set(),
-  )
   const [deletingSections, setDeletingSections] = useState<Set<string>>(
     () => new Set(),
   )
-  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({})
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({})
+  const { startVideoUpload, uploadsByTranscript } = useAdminVideoUpload()
+
+  const refreshTranscripts = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/videos', {
+        cache: 'no-store',
+      })
+      const payload: VideosResponse | null = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.success || !payload.transcripts) {
+        return
+      }
+
+      setTranscripts(payload.transcripts)
+      setErrorMessage(null)
+    } catch (error) {
+      console.error('Failed to refresh transcript videos after upload', error)
+    }
+  }, [])
 
   useEffect(() => {
     let isCancelled = false
@@ -88,6 +78,7 @@ export default function VideosPage() {
       try {
         const response = await fetch('/api/admin/videos', {
           signal: controller.signal,
+          cache: 'no-store',
         })
         const payload: VideosResponse | null = await response.json().catch(() => null)
 
@@ -136,102 +127,6 @@ export default function VideosPage() {
       return titleMatch || fileMatch
     })
   }, [searchQuery, transcripts])
-
-  const handleUpload = async (transcriptId: string, file: File) => {
-    const key = transcriptId
-
-    setUploadErrors((current) => {
-      const next = { ...current }
-      delete next[key]
-      return next
-    })
-
-    setUploadingSections((current) => {
-      const next = new Set(current)
-      next.add(key)
-      return next
-    })
-
-    try {
-      const prepareResponse = await fetch('/api/admin/videos/upload-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          transcriptId,
-          fileName: file.name,
-          contentType: file.type || 'application/octet-stream',
-        }),
-      })
-
-      const preparePayload: SignedUploadResponse | null = await prepareResponse
-        .json()
-        .catch(() => null)
-      if (
-        !prepareResponse.ok ||
-        !preparePayload?.success ||
-        !preparePayload.uploadUrl ||
-        !preparePayload.objectPath
-      ) {
-        const message = preparePayload?.error ?? 'Failed to prepare video upload.'
-        throw new Error(message)
-      }
-
-      const uploadHeaders = preparePayload.requiredHeaders ?? {
-        'Content-Type': file.type || 'application/octet-stream',
-      }
-
-      const uploadResponse = await fetch(preparePayload.uploadUrl, {
-        method: 'PUT',
-        headers: uploadHeaders,
-        body: file,
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video to storage.')
-      }
-
-      const finalizeResponse = await fetch('/api/admin/videos/upload-complete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          transcriptId,
-          objectPath: preparePayload.objectPath,
-        }),
-      })
-
-      const payload: UploadResponse | null = await finalizeResponse
-        .json()
-        .catch(() => null)
-      if (!finalizeResponse.ok || !payload?.success || !payload.video) {
-        const message = payload?.error ?? 'Failed to upload video.'
-        throw new Error(message)
-      }
-
-      setTranscripts((current) =>
-        current.map((transcript) => {
-          if (transcript.id !== transcriptId) return transcript
-          return { ...transcript, video: payload.video ?? null }
-        }),
-      )
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to upload video.'
-      setUploadErrors((current) => ({
-        ...current,
-        [key]: message,
-      }))
-    } finally {
-      setUploadingSections((current) => {
-        const next = new Set(current)
-        next.delete(key)
-        return next
-      })
-    }
-  }
 
   const handleDelete = async (transcriptId: string) => {
     const key = transcriptId
@@ -284,12 +179,31 @@ export default function VideosPage() {
 
   const handleFileChange = (
     transcriptId: string,
+    transcriptTitle: string,
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0]
-    if (!file) return
-    void handleUpload(transcriptId, file)
     event.target.value = ''
+    if (!file) return
+
+    void startVideoUpload({
+      transcriptId,
+      transcriptTitle,
+      file,
+    })
+      .then((video) => {
+        setTranscripts((current) =>
+          current.map((transcript) => {
+            if (transcript.id !== transcriptId) return transcript
+            return { ...transcript, video }
+          }),
+        )
+
+        void refreshTranscripts()
+      })
+      .catch(() => {
+        // Upload errors are surfaced through shared admin upload state.
+      })
   }
 
   return (
@@ -329,10 +243,15 @@ export default function VideosPage() {
         <div className="space-y-6">
           {filteredTranscripts.map((transcript) => {
             const key = transcript.id
-            const isUploading = uploadingSections.has(key)
+            const uploadState = uploadsByTranscript[key]
+            const isUploading = uploadState?.isUploading ?? false
             const isDeleting = deletingSections.has(key)
-            const uploadError = uploadErrors[key]
+            const uploadError = uploadState?.error ?? null
             const deleteError = deleteErrors[key]
+            const uploadPhase = uploadState?.phase
+            const uploadProgress = uploadState?.progress
+            const uploadProgressPercent =
+              typeof uploadProgress === 'number' ? Math.round(uploadProgress) : null
 
             return (
               <div
@@ -382,7 +301,7 @@ export default function VideosPage() {
                         <p>{formatUploadTime(transcript.video.uploaded_at)}</p>
                       </div>
                     ) : (
-                      'Awaiting upload.'
+                      null
                     )}
                   </div>
                 </div>
@@ -400,7 +319,9 @@ export default function VideosPage() {
                       accept="video/*"
                       className="sr-only"
                       disabled={isUploading || isDeleting}
-                      onChange={(event) => handleFileChange(transcript.id, event)}
+                      onChange={(event) =>
+                        handleFileChange(transcript.id, transcript.title, event)
+                      }
                     />
                   </label>
                   {transcript.video ? (
@@ -425,7 +346,13 @@ export default function VideosPage() {
                   ) : null}
                   <p className="text-xs text-gray-500">
                     {isUploading
-                      ? 'Uploading video...'
+                      ? uploadPhase === 'preparing'
+                        ? 'Preparing upload...'
+                        : uploadPhase === 'finalizing'
+                        ? 'Finalizing upload...'
+                        : uploadProgressPercent === null
+                        ? 'Uploading video...'
+                        : `Uploading video... ${uploadProgressPercent}%`
                       : isDeleting
                       ? 'Deleting video...'
                       : transcript.video
@@ -433,6 +360,29 @@ export default function VideosPage() {
                       : 'Select a video file to upload.'}
                   </p>
                 </div>
+                {isUploading && uploadPhase === 'uploading' ? (
+                  <div className="mt-3">
+                    <div
+                      className="h-2 w-full overflow-hidden rounded-full bg-gray-200"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={uploadProgressPercent ?? undefined}
+                      aria-label="Video upload progress"
+                    >
+                      <div
+                        className={`h-full rounded-full bg-primary-500 transition-all duration-200 ${
+                          uploadProgressPercent === null ? 'w-1/3 animate-pulse' : ''
+                        }`}
+                        style={
+                          uploadProgressPercent === null
+                            ? undefined
+                            : { width: `${uploadProgressPercent}%` }
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 {uploadError ? (
                   <p className="mt-2 text-xs text-red-600">{uploadError}</p>
                 ) : null}

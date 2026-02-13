@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
 import { currentUser } from '@clerk/nextjs/server'
 import Sidebar from '@/components/admin/Sidebar'
+import { AdminVideoUploadProvider } from '@/context/AdminVideoUploadContext'
 
 export const metadata: Metadata = {
   title: 'Admin Dashboard',
@@ -26,9 +27,13 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      <main className="ml-64 flex-1 bg-gray-50">{children}</main>
-    </div>
+    <AdminVideoUploadProvider>
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar />
+        <main className="ml-64 flex-1 bg-gray-50">
+          {children}
+        </main>
+      </div>
+    </AdminVideoUploadProvider>
   )
 }
