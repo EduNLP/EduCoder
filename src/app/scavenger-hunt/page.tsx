@@ -15,7 +15,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
@@ -569,7 +569,23 @@ function NotePanel({
   )
 }
 
+function ScavengerHuntPageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
+      Loading scavenger hunt workspace...
+    </div>
+  )
+}
+
 export default function ScavengerHuntPage() {
+  return (
+    <Suspense fallback={<ScavengerHuntPageFallback />}>
+      <ScavengerHuntPageContent />
+    </Suspense>
+  )
+}
+
+function ScavengerHuntPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { theme } = useTheme()
@@ -1874,7 +1890,7 @@ export default function ScavengerHuntPage() {
 
           const fetchedQuestions = questionsPayload.scavengerHunt?.questions ?? []
           const normalizedQuestions = fetchedQuestions
-            .map((question, index) => {
+            .map((question, index): ScavengerQuestion | null => {
               const questionId = question.id?.trim() ?? ''
               const prompt = question.question?.trim() ?? ''
               if (!questionId || !prompt) {
@@ -1890,7 +1906,7 @@ export default function ScavengerHuntPage() {
                   Number.isFinite(question.orderIndex)
                     ? question.orderIndex
                     : index + 1,
-              } satisfies ScavengerQuestion
+              }
             })
             .filter((question): question is ScavengerQuestion => question !== null)
             .sort((questionA, questionB) => questionA.orderIndex - questionB.orderIndex)
