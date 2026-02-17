@@ -16,17 +16,19 @@ The transcript is provided as a JSON array of utterances:
 
 #### Open Ended Note 
 
-```
-Title: json["title"]
+Use this runtime note payload:
 
-1.	What are the students saying or doing?
-json["answer_1"]
-2.	How can this be interpreted in relation to the lesson goal?
-json["answer_2"]
-3.	What are 1–2 possible teacher responses, and why?
-json["answer_3"]
-
+```json
+<<note>>
 ```
+
+Title: <<note_title>>
+
+1. What does this tell you about students’ progress towards the lesson goals?
+<<note_answer_1>>
+
+2. How might you, as a teacher, respond to this student(s)?
+<<note_answer_2>>
 
 
 ### Output Requirements

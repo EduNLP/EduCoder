@@ -176,7 +176,7 @@ export default function UploadTranscriptModal({
                 htmlFor="transcriptName"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Transcript Name
+                Transcript Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -195,7 +195,7 @@ export default function UploadTranscriptModal({
                 htmlFor="grade"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Grade
+                Grade <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"

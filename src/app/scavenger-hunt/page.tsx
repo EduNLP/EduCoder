@@ -216,16 +216,12 @@ type SpeakerColor = {
 const NOTE_FIELDS = [
   {
     id: 'q1',
-    label: 'What are students saying in the selected piece(s) of evidence?',
+    label:
+      'What does this tell you about students’ progress towards the lesson goals?',
   },
   {
     id: 'q2',
-    label: 'What would you like to note about this utterance?',
-  },
-  {
-    id: 'q3',
-    label:
-      "What does this utterance reveal about the student's thinking or understanding?",
+    label: 'How might you, as a teacher, respond to this student(s)?',
   },
 ] as const
 
@@ -740,16 +736,6 @@ function ScavengerHuntPageContent() {
     ],
     [isMarkingScavengerComplete, isScavengerComplete],
   )
-
-  const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
-  const llmAnnotationVisibilityAdmin =
-    transcriptMeta?.llmAnnotationVisibilityAdmin ?? 'hidden'
-  const canShowLlmAnnotations =
-    llmAnnotationVisibilityAdmin === 'always_visible' ||
-    (llmAnnotationVisibilityAdmin === 'visible_after_completion' &&
-      isAnnotationComplete)
-  const shouldShowLlmAnnotations =
-    canShowLlmAnnotations && Boolean(transcriptMeta?.llmAnnotationVisibilityUser)
 
   const llmNotesById = useMemo(
     () =>
@@ -2921,11 +2907,9 @@ function ScavengerHuntPageContent() {
                       const activeRowNotes = noteBadges.filter(
                         (note) => rowAssignedNotes[row.id]?.[note.id],
                       )
-                      const activeRowLlmNotes = shouldShowLlmAnnotations
-                        ? (llmNoteAssignmentsByRow[row.id] ?? [])
-                            .map((noteId) => llmNotesById[noteId])
-                            .filter((note): note is NoteEntry => Boolean(note))
-                        : []
+                      const activeRowLlmNotes = (llmNoteAssignmentsByRow[row.id] ?? [])
+                        .map((noteId) => llmNotesById[noteId])
+                        .filter((note): note is NoteEntry => Boolean(note))
 
                       const hasRowNotes =
                         activeRowNotes.length > 0 || activeRowLlmNotes.length > 0
@@ -3140,15 +3124,11 @@ function ScavengerHuntPageContent() {
           <NotePanel
             title="LLM notes"
             description=""
-            notes={shouldShowLlmAnnotations ? llmNotes : []}
+            notes={llmNotes}
             badgeTone="indigo"
             expandedNotes={expandedLlmNotes}
             onToggleExpanded={handleLlmNoteBadgeToggle}
-            emptyState={
-              shouldShowLlmAnnotations
-                ? 'No LLM notes were found for this transcript.'
-                : 'LLM notes are currently hidden for this transcript.'
-            }
+            emptyState="No LLM notes were found for this transcript."
           />
         </section>
       </div>
@@ -3186,13 +3166,13 @@ function ScavengerHuntPageContent() {
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                 <section className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-500">
-                    Instruction & context
+                    Lesson Learning Goals
                   </h3>
                   <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                       {transcriptMeta?.instructionContext?.trim()
                         ? transcriptMeta.instructionContext
-                        : 'No instructional context has been provided for this transcript yet.'}
+                        : "Lesson learning goals haven't been added yet. Please ask an admin to provide them."}
                     </p>
                     {instructionalMaterialLink?.trim() && (
                       <a
@@ -3271,9 +3251,11 @@ function ScavengerHuntPageContent() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-500">
-                      {instructionCardsError ?? 'No instructional materials have been uploaded yet.'}
-                    </div>
+                    instructionCardsError && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-500">
+                        {instructionCardsError}
+                      </div>
+                    )
                   )}
                 </section>
               </div>
