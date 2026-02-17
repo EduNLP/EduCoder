@@ -308,21 +308,43 @@ export default function EditAnnotatorModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          <form
+            onSubmit={handleSubmit}
+            autoComplete="off"
+            className="p-6 space-y-6 max-h-[70vh] overflow-y-auto"
+          >
+            <input
+              type="text"
+              name="admin-login-username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
+            <input
+              type="password"
+              name="admin-login-password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
             {/* Name */}
             <div>
               <label
-                htmlFor="name"
+                htmlFor="annotator-name"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
                 Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                id="name"
+                id="annotator-name"
+                name="annotator-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter full name"
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 required
                 disabled={isSubmitting || isEditing}
@@ -332,17 +354,19 @@ export default function EditAnnotatorModal({
             {/* Username */}
             <div>
               <label
-                htmlFor="username"
+                htmlFor="annotator-username"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
                 Username <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                id="username"
+                id="annotator-username"
+                name="annotator-username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter username"
+                autoComplete="off"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 required
                 disabled={isSubmitting || isEditing}
@@ -352,7 +376,7 @@ export default function EditAnnotatorModal({
             {/* Password */}
             <div>
               <label
-                htmlFor="password"
+                htmlFor="annotator-password"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
                 Password{' '}
@@ -365,10 +389,12 @@ export default function EditAnnotatorModal({
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  id="password"
+                  id="annotator-password"
+                  name="annotator-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={isEditing ? 'Current password' : 'Enter password'}
+                  autoComplete={isEditing ? 'off' : 'new-password'}
                   className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required={!isEditing}
                   disabled={isSubmitting}

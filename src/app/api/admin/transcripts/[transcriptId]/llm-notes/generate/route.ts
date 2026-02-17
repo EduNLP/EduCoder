@@ -30,9 +30,8 @@ const noteArraySchema = {
       title: { type: 'string' },
       answer_1: { type: 'string' },
       answer_2: { type: 'string' },
-      answer_3: { type: 'string' },
     },
-    required: ['title', 'answer_1', 'answer_2', 'answer_3'],
+    required: ['title', 'answer_1', 'answer_2'],
   },
 } as const
 
@@ -93,7 +92,6 @@ type GeneratedNote = {
   title: string
   answer_1: string
   answer_2: string
-  answer_3: string
 }
 
 type GeneratedNoteAssignment = {
@@ -241,9 +239,8 @@ const normalizeGeneratedNotes = (value: unknown): GeneratedNote[] | null => {
     const title = getTextField(item, 'title')
     const answer_1 = getTextField(item, 'answer_1') || getTextField(item, 'q1')
     const answer_2 = getTextField(item, 'answer_2') || getTextField(item, 'q2')
-    const answer_3 = getTextField(item, 'answer_3') || getTextField(item, 'q3')
 
-    if (!title || !answer_1 || !answer_2 || !answer_3) {
+    if (!title || !answer_1 || !answer_2) {
       return null
     }
 
@@ -251,7 +248,6 @@ const normalizeGeneratedNotes = (value: unknown): GeneratedNote[] | null => {
       title,
       answer_1,
       answer_2,
-      answer_3,
     })
   }
 
@@ -336,29 +332,70 @@ const parseGeneratedNoteAssignments = (outputText: string): GeneratedNoteAssignm
   throw new Error('OpenAI response could not be parsed as note assignments JSON.')
 }
 
-const buildPromptWithTranscript = (promptTemplate: string, transcriptJson: string) =>
-  promptTemplate.includes('<<transcript>>')
-    ? promptTemplate.split('<<transcript>>').join(transcriptJson)
-    : `${promptTemplate}\n\nTranscript:\n${transcriptJson}`
+const buildNoteCreationPrompt = ({
+  promptTemplate,
+  transcriptJson,
+  instructionContext,
+}: {
+  promptTemplate: string
+  transcriptJson: string
+  instructionContext: string
+}) => {
+  let prompt = promptTemplate
+  const hasTranscriptPlaceholder = prompt.includes('<<transcript>>')
+  const hasInstructionContextPlaceholder = prompt.includes('<<instruction_context>>')
+
+  if (hasTranscriptPlaceholder) {
+    prompt = prompt.split('<<transcript>>').join(transcriptJson)
+  }
+  if (hasInstructionContextPlaceholder) {
+    prompt = prompt
+      .split('<<instruction_context>>')
+      .join(instructionContext || 'No instruction context was provided.')
+  }
+
+  const sections = [prompt]
+  if (!hasTranscriptPlaceholder) {
+    sections.push(`Transcript:\n${transcriptJson}`)
+  }
+  if (instructionContext && !hasInstructionContextPlaceholder) {
+    sections.push(`Instruction Context:\n${instructionContext}`)
+  }
+
+  return sections.filter(Boolean).join('\n\n')
+}
 
 const buildNoteAssignmentPrompt = ({
   promptTemplate,
   transcriptJson,
-  noteJson,
+  note,
 }: {
   promptTemplate: string
   transcriptJson: string
-  noteJson: string
+  note: GeneratedNote
 }) => {
+  const noteJson = JSON.stringify(note, null, 2)
   let prompt = promptTemplate
   const hasTranscriptPlaceholder = prompt.includes('<<transcript>>')
   const hasNotePlaceholder = prompt.includes('<<note>>')
+  const hasNoteTitlePlaceholder = prompt.includes('<<note_title>>')
+  const hasNoteAnswer1Placeholder = prompt.includes('<<note_answer_1>>')
+  const hasNoteAnswer2Placeholder = prompt.includes('<<note_answer_2>>')
 
   if (hasTranscriptPlaceholder) {
     prompt = prompt.split('<<transcript>>').join(transcriptJson)
   }
   if (hasNotePlaceholder) {
     prompt = prompt.split('<<note>>').join(noteJson)
+  }
+  if (hasNoteTitlePlaceholder) {
+    prompt = prompt.split('<<note_title>>').join(note.title)
+  }
+  if (hasNoteAnswer1Placeholder) {
+    prompt = prompt.split('<<note_answer_1>>').join(note.answer_1)
+  }
+  if (hasNoteAnswer2Placeholder) {
+    prompt = prompt.split('<<note_answer_2>>').join(note.answer_2)
   }
 
   const sections = [prompt]
@@ -367,6 +404,15 @@ const buildNoteAssignmentPrompt = ({
   }
   if (!hasNotePlaceholder) {
     sections.push(`Open Ended Note JSON:\n${noteJson}`)
+  }
+  if (!hasNoteTitlePlaceholder) {
+    sections.push(`Note Title:\n${note.title}`)
+  }
+  if (!hasNoteAnswer1Placeholder) {
+    sections.push(`Note Answer 1:\n${note.answer_1}`)
+  }
+  if (!hasNoteAnswer2Placeholder) {
+    sections.push(`Note Answer 2:\n${note.answer_2}`)
   }
 
   return sections.filter(Boolean).join('\n\n')
@@ -496,7 +542,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const transcript = await prisma.transcripts.findFirst({
       where: { id: transcriptId, workspace_id: actor.workspace_id },
-      select: { id: true },
+      select: { id: true, instruction_context: true },
     })
 
     if (!transcript) {
@@ -643,6 +689,7 @@ export async function POST(request: Request, context: RouteContext) {
       null,
       2,
     )
+    const instructionContext = transcript.instruction_context.trim()
 
     const noteCreationPromptTemplate = [
       promptSettings.note_creation_prompt.trim(),
@@ -650,10 +697,11 @@ export async function POST(request: Request, context: RouteContext) {
     ]
       .filter(Boolean)
       .join('\n\n')
-    const noteCreationPrompt = buildPromptWithTranscript(
-      noteCreationPromptTemplate,
+    const noteCreationPrompt = buildNoteCreationPrompt({
+      promptTemplate: noteCreationPromptTemplate,
       transcriptJson,
-    )
+      instructionContext,
+    })
 
     await updateTranscriptAnnotationStatus(transcriptId, 'in_process')
     shouldResetStatus = true
@@ -706,11 +754,10 @@ export async function POST(request: Request, context: RouteContext) {
     try {
       noteAssignmentLineIdsByNote = await Promise.all(
         generatedNotes.map(async (note) => {
-          const noteJson = JSON.stringify(note, null, 2)
           const noteAssignmentPrompt = buildNoteAssignmentPrompt({
             promptTemplate: noteAssignmentPromptTemplate,
             transcriptJson,
-            noteJson,
+            note,
           })
 
           const outputText = await requestOpenAiJsonOutput({
@@ -784,7 +831,7 @@ export async function POST(request: Request, context: RouteContext) {
               title: note.title,
               q1: note.answer_1,
               q2: note.answer_2,
-              q3: note.answer_3,
+              q3: '',
               source: 'llm',
             },
             select: {

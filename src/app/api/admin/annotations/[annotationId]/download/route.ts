@@ -248,9 +248,8 @@ export async function GET(request: Request, context: RouteContext) {
     const notesHeader = [
       'Note ID',
       'Title',
-      'What are the students saying or doing?',
-      'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
-      'What possible teacher responses would you do?',
+      'What does this tell you about students’ progress towards the lesson goals?',
+      'How might you, as a teacher, respond to this student(s)?',
     ]
     const notesRows: (string | number)[][] = [
       notesHeader,
@@ -259,7 +258,6 @@ export async function GET(request: Request, context: RouteContext) {
         note.title ?? '',
         note.q1 ?? '',
         note.q2 ?? '',
-        note.q3 ?? '',
       ]),
     ]
     const notesWorksheet = utils.aoa_to_sheet(notesRows)

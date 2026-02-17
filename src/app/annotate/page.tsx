@@ -199,7 +199,6 @@ type NewNoteDraft = {
   title: string
   studentEvidence: string
   utteranceNote: string
-  thinkingInsight: string
 }
 
 type SpeakerColor = {
@@ -233,21 +232,16 @@ const NOTE_HIGHLIGHT_COLORS = [
 const NOTE_DETAILS_FIELD_CONFIG = [
   {
     id: 'studentEvidence',
-    label: 'What are the students saying or doing?',
+    label:
+      'What does this tell you about students’ progress towards the lesson goals?',
     placeholder: 'Add student evidence',
     noteKey: 'q1',
   },
   {
     id: 'utteranceNote',
-    label: 'Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)',
+    label: 'How might you, as a teacher, respond to this student(s)?',
     placeholder: 'Add interpretation tied to the lesson purpose',
     noteKey: 'q2',
-  },
-  {
-    id: 'thinkingInsight',
-    label: 'What possible teacher responses would you do?',
-    placeholder: 'Add possible teacher responses',
-    noteKey: 'q3',
   },
 ] as const
 const createAssignmentListLookup = (assignments: NoteAssignmentRecord[]) =>
@@ -262,11 +256,9 @@ const createAssignmentListLookup = (assignments: NoteAssignmentRecord[]) =>
 const createNoteContentFields = (note?: {
   q1?: string
   q2?: string
-  q3?: string
 }) => [
   note?.q1 ?? '',
   note?.q2 ?? '',
-  note?.q3 ?? '',
 ]
 
 const createNoteBadges = (notes: NoteRecord[]) =>
@@ -308,7 +300,6 @@ const createEmptyNewNote = (): NewNoteDraft => ({
   title: '',
   studentEvidence: '',
   utteranceNote: '',
-  thinkingInsight: '',
 })
 
 const createEmptyNoteAssignments = (noteBadges: NoteBadge[]) =>
@@ -2263,14 +2254,12 @@ function AnnotationPageContent() {
     const nextDetails = [
       (currentDetails[0] ?? '').trim(),
       (currentDetails[1] ?? '').trim(),
-      (currentDetails[2] ?? '').trim(),
     ]
 
     const didChange =
       currentTitle !== (note.label ?? '').trim() ||
       nextDetails[0] !== (note.q1 ?? '').trim() ||
-      nextDetails[1] !== (note.q2 ?? '').trim() ||
-      nextDetails[2] !== (note.q3 ?? '').trim()
+      nextDetails[1] !== (note.q2 ?? '').trim()
 
     if (!didChange) {
       clearNoteEditing(noteId)
@@ -2297,7 +2286,6 @@ function AnnotationPageContent() {
           title: currentTitle,
           q1: nextDetails[0],
           q2: nextDetails[1],
-          q3: nextDetails[2],
         }),
       })
       const payload: NoteUpdateResponse | null = await response
@@ -2333,7 +2321,7 @@ function AnnotationPageContent() {
       }))
       setNoteDetailsDrafts((prev) => ({
         ...prev,
-        [noteId]: [updatedNote.q1, updatedNote.q2, updatedNote.q3],
+        [noteId]: [updatedNote.q1, updatedNote.q2],
       }))
       clearNoteEditing(noteId)
       triggerSavedBadge()
@@ -2525,7 +2513,6 @@ function AnnotationPageContent() {
           title,
           studentEvidence: newNote.studentEvidence,
           utteranceNote: newNote.utteranceNote,
-          thinkingInsight: newNote.thinkingInsight,
         }),
       })
       const payload: NoteCreateResponse | null = await response
@@ -2750,7 +2737,9 @@ function AnnotationPageContent() {
                 }
                 className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                 aria-label={
-                  instructionCollapsed ? 'Expand instructions' : 'Collapse instructions'
+                  instructionCollapsed
+                    ? 'Expand lesson learning goals'
+                    : 'Collapse lesson learning goals'
                 }
               >
                 {instructionCollapsed ? (
@@ -2770,12 +2759,12 @@ function AnnotationPageContent() {
                 >
                   <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/70">
                     <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                      Instruction & context
+                      Lesson Learning Goals
                     </p>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                       {transcriptMeta?.instructionContext?.trim()
                         ? transcriptMeta.instructionContext
-                        : 'No instructional context has been provided for this transcript yet.'}
+                        : 'Lesson learning goals haven\'t been added yet. Please ask an admin to provide them.'}
                     </p>
                   </div>
                   {isLoadingInstructionCards ? (
@@ -2820,10 +2809,11 @@ function AnnotationPageContent() {
                       )
                     })
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
-                      {instructionCardsError ??
-                        'No instructional materials have been uploaded yet.'}
-                    </div>
+                    instructionCardsError && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
+                        {instructionCardsError}
+                      </div>
+                    )
                   )}
                 </div>
               </div>
@@ -3635,7 +3625,7 @@ function AnnotationPageContent() {
                                       </div>
                                       <div className="space-y-2">
                                         <label className="text-sm font-semibold text-slate-700">
-                                          What are the students saying or doing?
+                                          What does this tell you about students’ progress towards the lesson goals?
                                         </label>
                                         <textarea
                                           value={newNote.studentEvidence}
@@ -3652,7 +3642,7 @@ function AnnotationPageContent() {
                                       </div>
                                       <div className="space-y-2">
                                         <label className="text-sm font-semibold text-slate-700">
-                                          Interpret this w/r/t the lesson purpose (activity, lesson, and unit learning goal info)
+                                          How might you, as a teacher, respond to this student(s)?
                                         </label>
                                         <textarea
                                           value={newNote.utteranceNote}
@@ -3661,23 +3651,6 @@ function AnnotationPageContent() {
                                             setNewNote((prev) => ({
                                               ...prev,
                                               utteranceNote: event.target.value,
-                                            }))
-                                          }}
-                                          rows={3}
-                                          className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-300 focus:outline-none"
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-slate-700">
-                                          What possible teacher responses would you do?
-                                        </label>
-                                        <textarea
-                                          value={newNote.thinkingInsight}
-                                          onChange={(event) => {
-                                            setCreateNoteError(null)
-                                            setNewNote((prev) => ({
-                                              ...prev,
-                                              thinkingInsight: event.target.value,
                                             }))
                                           }}
                                           rows={3}
