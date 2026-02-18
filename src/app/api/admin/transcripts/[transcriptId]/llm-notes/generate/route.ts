@@ -50,11 +50,12 @@ const noteAssignmentArraySchema = {
     type: 'object',
     additionalProperties: false,
     properties: {
+      note_number: { type: 'integer' },
       line_number: { type: 'integer' },
       speaker: { type: 'string' },
       utterance: { type: 'string' },
     },
-    required: ['line_number', 'speaker', 'utterance'],
+    required: ['note_number', 'line_number', 'speaker', 'utterance'],
   },
 } as const
 
@@ -86,6 +87,7 @@ type PromptSourceLine = {
   line_number: number
   speaker: string
   utterance: string
+  segment_id: string | null
 }
 
 type GeneratedNote = {
@@ -95,6 +97,7 @@ type GeneratedNote = {
 }
 
 type GeneratedNoteAssignment = {
+  note_number: number
   line_number: number
   speaker: string
   utterance: string
@@ -294,6 +297,14 @@ const normalizeGeneratedNoteAssignments = (
       return null
     }
 
+    const noteNumber =
+      getPositiveIntegerField(item, 'note_number') ??
+      getPositiveIntegerField(item, 'note_index') ??
+      getPositiveIntegerField(item, 'note')
+    if (noteNumber === null) {
+      return null
+    }
+
     const lineNumber =
       getPositiveIntegerField(item, 'line_number') ??
       getPositiveIntegerField(item, 'line')
@@ -302,6 +313,7 @@ const normalizeGeneratedNoteAssignments = (
     }
 
     assignments.push({
+      note_number: noteNumber,
       line_number: lineNumber,
       speaker: getTextField(item, 'speaker'),
       utterance: getTextField(item, 'utterance'),
@@ -367,52 +379,74 @@ const buildNoteCreationPrompt = ({
 
 const buildNoteAssignmentPrompt = ({
   promptTemplate,
-  transcriptJson,
-  note,
+  segmentTranscriptJson,
+  notes,
+  segmentLabel,
 }: {
   promptTemplate: string
-  transcriptJson: string
-  note: GeneratedNote
+  segmentTranscriptJson: string
+  notes: GeneratedNote[]
+  segmentLabel: string
 }) => {
-  const noteJson = JSON.stringify(note, null, 2)
+  const notesJson = JSON.stringify(
+    notes.map((note, index) => ({
+      note_number: index + 1,
+      ...note,
+    })),
+    null,
+    2,
+  )
+  const noteTitles = notes.map((note, index) => `${index + 1}. ${note.title}`).join('\n')
+  const noteAnswers1 = notes
+    .map((note, index) => `${index + 1}. ${note.answer_1}`)
+    .join('\n')
+  const noteAnswers2 = notes
+    .map((note, index) => `${index + 1}. ${note.answer_2}`)
+    .join('\n')
   let prompt = promptTemplate
   const hasTranscriptPlaceholder = prompt.includes('<<transcript>>')
+  const hasSegmentTranscriptPlaceholder = prompt.includes('<<segment_transcript>>')
+  const hasNotesPlaceholder = prompt.includes('<<notes>>')
+  const hasSegmentLabelPlaceholder = prompt.includes('<<segment_label>>')
   const hasNotePlaceholder = prompt.includes('<<note>>')
   const hasNoteTitlePlaceholder = prompt.includes('<<note_title>>')
   const hasNoteAnswer1Placeholder = prompt.includes('<<note_answer_1>>')
   const hasNoteAnswer2Placeholder = prompt.includes('<<note_answer_2>>')
 
   if (hasTranscriptPlaceholder) {
-    prompt = prompt.split('<<transcript>>').join(transcriptJson)
+    prompt = prompt.split('<<transcript>>').join(segmentTranscriptJson)
+  }
+  if (hasSegmentTranscriptPlaceholder) {
+    prompt = prompt.split('<<segment_transcript>>').join(segmentTranscriptJson)
+  }
+  if (hasNotesPlaceholder) {
+    prompt = prompt.split('<<notes>>').join(notesJson)
+  }
+  if (hasSegmentLabelPlaceholder) {
+    prompt = prompt.split('<<segment_label>>').join(segmentLabel)
   }
   if (hasNotePlaceholder) {
-    prompt = prompt.split('<<note>>').join(noteJson)
+    prompt = prompt.split('<<note>>').join(notesJson)
   }
   if (hasNoteTitlePlaceholder) {
-    prompt = prompt.split('<<note_title>>').join(note.title)
+    prompt = prompt.split('<<note_title>>').join(noteTitles)
   }
   if (hasNoteAnswer1Placeholder) {
-    prompt = prompt.split('<<note_answer_1>>').join(note.answer_1)
+    prompt = prompt.split('<<note_answer_1>>').join(noteAnswers1)
   }
   if (hasNoteAnswer2Placeholder) {
-    prompt = prompt.split('<<note_answer_2>>').join(note.answer_2)
+    prompt = prompt.split('<<note_answer_2>>').join(noteAnswers2)
   }
 
   const sections = [prompt]
-  if (!hasTranscriptPlaceholder) {
-    sections.push(`Transcript:\n${transcriptJson}`)
+  if (!hasTranscriptPlaceholder && !hasSegmentTranscriptPlaceholder) {
+    sections.push(`Segment Transcript:\n${segmentTranscriptJson}`)
   }
-  if (!hasNotePlaceholder) {
-    sections.push(`Open Ended Note JSON:\n${noteJson}`)
+  if (!hasNotesPlaceholder && !hasNotePlaceholder) {
+    sections.push(`Open Ended Notes JSON:\n${notesJson}`)
   }
-  if (!hasNoteTitlePlaceholder) {
-    sections.push(`Note Title:\n${note.title}`)
-  }
-  if (!hasNoteAnswer1Placeholder) {
-    sections.push(`Note Answer 1:\n${note.answer_1}`)
-  }
-  if (!hasNoteAnswer2Placeholder) {
-    sections.push(`Note Answer 2:\n${note.answer_2}`)
+  if (segmentLabel && !hasSegmentLabelPlaceholder) {
+    sections.push(`Segment Label:\n${segmentLabel}`)
   }
 
   return sections.filter(Boolean).join('\n\n')
@@ -615,6 +649,7 @@ export async function POST(request: Request, context: RouteContext) {
         line: true,
         speaker: true,
         utterance: true,
+        segment_id: true,
       },
     })
 
@@ -625,6 +660,7 @@ export async function POST(request: Request, context: RouteContext) {
         line_number: line.line,
         speaker: line.speaker?.trim() || 'Unknown speaker',
         utterance: line.utterance?.trim() ?? '',
+        segment_id: line.segment_id,
       }))
 
     if (promptLines.length === 0) {
@@ -743,6 +779,73 @@ export async function POST(request: Request, context: RouteContext) {
       }
     })
 
+    const orderedSegments = await prisma.transcriptSegments.findMany({
+      where: { transcript_id: transcriptId },
+      orderBy: { segment_index: 'asc' },
+      select: {
+        id: true,
+        segment_index: true,
+        segment_title: true,
+      },
+    })
+
+    const linesBySegmentId = new Map<string, PromptSourceLine[]>()
+    const unsegmentedLines: PromptSourceLine[] = []
+    promptLines.forEach((line) => {
+      if (!line.segment_id) {
+        unsegmentedLines.push(line)
+        return
+      }
+
+      const current = linesBySegmentId.get(line.segment_id) ?? []
+      current.push(line)
+      linesBySegmentId.set(line.segment_id, current)
+    })
+
+    const noteAssignmentSegments: Array<{
+      segmentLabel: string
+      lines: PromptSourceLine[]
+    }> = []
+    const knownSegmentIds = new Set<string>()
+
+    orderedSegments.forEach((segment) => {
+      const lines = linesBySegmentId.get(segment.id) ?? []
+      if (lines.length === 0) {
+        return
+      }
+
+      knownSegmentIds.add(segment.id)
+      noteAssignmentSegments.push({
+        segmentLabel: `Segment ${segment.segment_index}: ${segment.segment_title}`,
+        lines,
+      })
+    })
+
+    linesBySegmentId.forEach((lines, segmentId) => {
+      if (knownSegmentIds.has(segmentId) || lines.length === 0) {
+        return
+      }
+
+      noteAssignmentSegments.push({
+        segmentLabel: `Segment ${noteAssignmentSegments.length + 1}`,
+        lines,
+      })
+    })
+
+    if (unsegmentedLines.length > 0) {
+      noteAssignmentSegments.push({
+        segmentLabel: 'Unsegmented Lines',
+        lines: unsegmentedLines,
+      })
+    }
+
+    if (noteAssignmentSegments.length === 0) {
+      noteAssignmentSegments.push({
+        segmentLabel: 'Segment 1',
+        lines: promptLines,
+      })
+    }
+
     const noteAssignmentPromptTemplate = [
       promptSettings.note_assignment_prompt.trim(),
       noteAssignmentStaticPromptPart.trim(),
@@ -752,46 +855,77 @@ export async function POST(request: Request, context: RouteContext) {
 
     let noteAssignmentLineIdsByNote: string[][]
     try {
-      noteAssignmentLineIdsByNote = await Promise.all(
-        generatedNotes.map(async (note) => {
-          const noteAssignmentPrompt = buildNoteAssignmentPrompt({
-            promptTemplate: noteAssignmentPromptTemplate,
-            transcriptJson,
-            note,
+      if (generatedNotes.length === 0) {
+        noteAssignmentLineIdsByNote = []
+      } else {
+        const assignmentLineIdsBySegment = await Promise.all(
+          noteAssignmentSegments.map(async (segment) => {
+            const segmentTranscriptJson = JSON.stringify(
+              segment.lines.map(({ line_number, speaker, utterance }) => ({
+                line_number,
+                speaker,
+                utterance,
+              })),
+              null,
+              2,
+            )
+            const segmentLineIds = new Set(segment.lines.map((line) => line.line_id))
+
+            const noteAssignmentPrompt = buildNoteAssignmentPrompt({
+              promptTemplate: noteAssignmentPromptTemplate,
+              segmentTranscriptJson,
+              notes: generatedNotes,
+              segmentLabel: segment.segmentLabel,
+            })
+
+            const outputText = await requestOpenAiJsonOutput({
+              openAiApiKey,
+              input: noteAssignmentPrompt,
+              schemaName: 'llm_generated_note_assignments',
+              schema: noteAssignmentResponseSchema,
+              requestFailureMessage:
+                'OpenAI request failed while generating note assignments.',
+            })
+
+            const generatedAssignments = parseGeneratedNoteAssignments(outputText)
+            const lineIdsByNote = generatedNotes.map(() => new Set<string>())
+
+            generatedAssignments.forEach((assignment) => {
+              const noteIndex = assignment.note_number - 1
+              if (noteIndex < 0 || noteIndex >= lineIdsByNote.length) {
+                return
+              }
+
+              const lineIdFromLineNumber = lineIdByLineNumber.get(assignment.line_number)
+              const lineId =
+                lineIdFromLineNumber ??
+                lineIdBySpeakerUtterance.get(
+                  buildTranscriptLineMatchKey(assignment.speaker, assignment.utterance),
+                )
+
+              if (!lineId || !segmentLineIds.has(lineId)) {
+                return
+              }
+
+              lineIdsByNote[noteIndex].add(lineId)
+            })
+
+            return lineIdsByNote
+          }),
+        )
+
+        const aggregatedLineIdsByNote = generatedNotes.map(() => new Set<string>())
+        assignmentLineIdsBySegment.forEach((segmentLineIdsByNote) => {
+          segmentLineIdsByNote.forEach((lineIds, noteIndex) => {
+            lineIds.forEach((lineId) => {
+              aggregatedLineIdsByNote[noteIndex].add(lineId)
+            })
           })
-
-          const outputText = await requestOpenAiJsonOutput({
-            openAiApiKey,
-            input: noteAssignmentPrompt,
-            schemaName: 'llm_generated_note_assignments',
-            schema: noteAssignmentResponseSchema,
-            requestFailureMessage:
-              'OpenAI request failed while generating note assignments.',
-          })
-
-          const generatedAssignments = parseGeneratedNoteAssignments(outputText)
-          return Array.from(
-            new Set(
-              generatedAssignments
-                .map((assignment) => {
-                  const lineIdFromLineNumber = lineIdByLineNumber.get(
-                    assignment.line_number,
-                  )
-                  if (lineIdFromLineNumber) {
-                    return lineIdFromLineNumber
-                  }
-
-                  const lineMatchKey = buildTranscriptLineMatchKey(
-                    assignment.speaker,
-                    assignment.utterance,
-                  )
-                  return lineIdBySpeakerUtterance.get(lineMatchKey)
-                })
-                .filter((lineId): lineId is string => Boolean(lineId)),
-            ),
-          )
-        }),
-      )
+        })
+        noteAssignmentLineIdsByNote = aggregatedLineIdsByNote.map((lineIds) =>
+          Array.from(lineIds),
+        )
+      }
     } catch (error) {
       await safeUpdateTranscriptAnnotationStatus(transcriptId, 'not_generated')
       shouldResetStatus = false
