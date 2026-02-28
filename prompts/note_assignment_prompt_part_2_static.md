@@ -1,5 +1,10 @@
+### Segment
 
-### Transcript
+Current segment:
+
+<<segment_label>>
+
+### Segment Transcript
 
 The transcript is provided as a JSON array of utterances:
 
@@ -11,32 +16,30 @@ The transcript is provided as a JSON array of utterances:
   }
 ]
 
-<<transcript>>
+<<segment_transcript>>
 
+### Open Ended Notes
 
-#### Open Ended Note 
+Use the runtime notes payload below. `note_number` is the 1-based identifier for each note.
 
-Use this runtime note payload:
+[
+  {
+    "note_number": 1,
+    "title": "",
+    "answer_1": "",
+    "answer_2": ""
+  }
+]
 
-```json
-<<note>>
-```
-
-Title: <<note_title>>
-
-1. What does this tell you about students’ progress towards the lesson goals?
-<<note_answer_1>>
-
-2. How might you, as a teacher, respond to this student(s)?
-<<note_answer_2>>
-
+<<notes>>
 
 ### Output Requirements
 
-- Return valid JSON only
-- Output must be a JSON object with an `assignments` array
-- Each array element in `assignments` must be an exact transcript utterance
-
+- Return valid JSON only.
+- Output must be a JSON object with an `assignments` array.
+- Each `assignment` must include `note_number`, `line_number`, `speaker`, and `utterance`.
+- `note_number` must match a provided note.
+- `line_number`, `speaker`, and `utterance` must exactly match a line from the segment transcript.
 
 ### Output Format
 
@@ -44,7 +47,8 @@ Title: <<note_title>>
 {
   "assignments": [
     {
-      "line_number": "",
+      "note_number": 1,
+      "line_number": 1,
       "speaker": "",
       "utterance": ""
     }
