@@ -36,6 +36,13 @@ type TranscriptsResponse = {
   error?: string
 }
 
+type ImportDemoResponse = {
+  success?: boolean
+  imported?: boolean
+  transcriptId?: string
+  error?: string
+}
+
 const PREFERRED_TILE_HEIGHT = 320
 
 const statusFilters = [
@@ -116,6 +123,10 @@ export default function DashboardPage() {
     })
   }, [searchQuery, statusFilter, transcripts])
 
+  const showImportDemoButton = !isLoading && transcripts.length === 0
+  const [isImportingDemo, setIsImportingDemo] = useState(false)
+  const [importDemoError, setImportDemoError] = useState<string | null>(null)
+
   const pageBackgroundStyle = useMemo(
     () => ({
       backgroundColor: theme.backgroundColor,
@@ -173,58 +184,49 @@ export default function DashboardPage() {
 
   }, [authLoaded, isSignedIn, router, userLoaded])
 
-  useEffect(() => {
-    let isCancelled = false
-    const controller = new AbortController()
+  const fetchTranscripts = useCallback(async (signal?: AbortSignal) => {
+    setIsLoading(true)
+    setErrorMessage(null)
 
-    const fetchTranscripts = async () => {
-      setIsLoading(true)
-      setErrorMessage(null)
+    try {
+      const response = await fetch('/api/annotator/transcripts', {
+        signal,
+      })
+      const payload: TranscriptsResponse | null = await response
+        .json()
+        .catch(() => null)
 
-      try {
-        const response = await fetch('/api/annotator/transcripts', {
-          signal: controller.signal,
-        })
-        const payload: TranscriptsResponse | null = await response
-          .json()
-          .catch(() => null)
-
-        if (!response.ok || !payload?.success || !payload.transcripts) {
-          const message = payload?.error ?? 'Failed to load assigned transcripts.'
-          throw new Error(message)
-        }
-
-        if (!isCancelled) {
-          setTranscripts(payload.transcripts)
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return
-        }
-
-        console.error('Failed to load assigned transcripts', error)
-        if (!isCancelled) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Unable to load assigned transcripts.'
-          setErrorMessage(message)
-          setTranscripts([])
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false)
-        }
+      if (!response.ok || !payload?.success || !payload.transcripts) {
+        const message = payload?.error ?? 'Failed to load assigned transcripts.'
+        throw new Error(message)
       }
-    }
 
-    fetchTranscripts()
+      setTranscripts(payload.transcripts)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
 
-    return () => {
-      isCancelled = true
-      controller.abort()
+      console.error('Failed to load assigned transcripts', error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to load assigned transcripts.'
+      setErrorMessage(message)
+      setTranscripts([])
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchTranscripts(controller.signal)
+
+    return () => {
+      controller.abort()
+    }
+  }, [fetchTranscripts])
 
   if (!authLoaded || !userLoaded) {
     return (
@@ -259,6 +261,37 @@ export default function DashboardPage() {
   const handleMenuLinkAction = (link: { id: string }) => {
     if (link.id === 'toggle-toolbar') {
       handleToggleToolbar()
+    }
+  }
+
+  const handleImportDemo = async () => {
+    setImportDemoError(null)
+    setErrorMessage(null)
+    setIsImportingDemo(true)
+
+    try {
+      const response = await fetch('/api/admin/transcripts/import-demo', {
+        method: 'POST',
+      })
+
+      const payload: ImportDemoResponse | null = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error ?? 'Failed to import demo files.')
+      }
+
+      await fetchTranscripts()
+    } catch (error) {
+      console.error('Failed to import demo files', error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to import demo files right now.'
+      setImportDemoError(message)
+    } finally {
+      setIsImportingDemo(false)
     }
   }
 
@@ -394,14 +427,34 @@ export default function DashboardPage() {
               <div className="col-span-full flex flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-8 text-center">
                 <p className="text-base font-semibold text-slate-900">
                   {transcripts.length === 0
-                    ? 'No transcripts have been assigned to you yet.'
+                    ? 'No transcripts are assigned to you yet.'
                     : 'No transcripts match your filters.'}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {transcripts.length === 0
-                    ? 'Check back later or ask an admin to assign a transcript.'
+                    ? 'Import demo files to quickly explore the workspace.'
                     : 'Try clearing the search or switching status filters.'}
                 </p>
+                {importDemoError && (
+                  <p className="mt-4 max-w-xl rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                    {importDemoError}
+                  </p>
+                )}
+                {showImportDemoButton && (
+                  <button
+                    type="button"
+                    onClick={handleImportDemo}
+                    disabled={isImportingDemo}
+                    className="mt-6 inline-flex items-center justify-center rounded-2xl border border-indigo-300 bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  >
+                    {isImportingDemo ? 'Importing demo files…' : 'Import demo files'}
+                  </button>
+                )}
+                {isImportingDemo && (
+                  <p className="mt-2 text-xs font-medium uppercase tracking-wide text-indigo-500">
+                    This may take up to a minute.
+                  </p>
+                )}
               </div>
             )}
           </div>
