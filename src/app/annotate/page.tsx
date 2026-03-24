@@ -204,6 +204,7 @@ type NewNoteDraft = {
 type SpeakerColor = {
   rowBg: string
   hoverBg: string
+  groupHoverBg: string
   stickyBg: string
   selectedBg: string
   selectedStickyBg: string
@@ -338,6 +339,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-sky-50',
     hoverBg: 'hover:bg-sky-100',
+    groupHoverBg: 'group-hover:bg-sky-100',
     stickyBg: 'bg-sky-50',
     selectedBg: 'bg-sky-100',
     selectedStickyBg: 'bg-sky-100',
@@ -351,6 +353,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-amber-50',
     hoverBg: 'hover:bg-amber-100',
+    groupHoverBg: 'group-hover:bg-amber-100',
     stickyBg: 'bg-amber-50',
     selectedBg: 'bg-amber-100',
     selectedStickyBg: 'bg-amber-100',
@@ -364,6 +367,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-emerald-50',
     hoverBg: 'hover:bg-emerald-100',
+    groupHoverBg: 'group-hover:bg-emerald-100',
     stickyBg: 'bg-emerald-50',
     selectedBg: 'bg-emerald-100',
     selectedStickyBg: 'bg-emerald-100',
@@ -377,6 +381,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-indigo-50',
     hoverBg: 'hover:bg-indigo-100',
+    groupHoverBg: 'group-hover:bg-indigo-100',
     stickyBg: 'bg-indigo-50',
     selectedBg: 'bg-indigo-100',
     selectedStickyBg: 'bg-indigo-100',
@@ -390,6 +395,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-rose-50',
     hoverBg: 'hover:bg-rose-100',
+    groupHoverBg: 'group-hover:bg-rose-100',
     stickyBg: 'bg-rose-50',
     selectedBg: 'bg-rose-100',
     selectedStickyBg: 'bg-rose-100',
@@ -403,6 +409,7 @@ const speakerPalette: SpeakerColor[] = [
   {
     rowBg: 'bg-lime-50',
     hoverBg: 'hover:bg-lime-100',
+    groupHoverBg: 'group-hover:bg-lime-100',
     stickyBg: 'bg-lime-50',
     selectedBg: 'bg-lime-100',
     selectedStickyBg: 'bg-lime-100',
@@ -418,6 +425,7 @@ const speakerPalette: SpeakerColor[] = [
 const fallbackSpeakerColor: SpeakerColor = {
   rowBg: 'bg-slate-50',
   hoverBg: 'hover:bg-slate-100',
+  groupHoverBg: 'group-hover:bg-slate-100',
   stickyBg: 'bg-slate-50',
   selectedBg: 'bg-slate-100',
   selectedStickyBg: 'bg-slate-100',
@@ -3270,10 +3278,7 @@ function AnnotationPageContent() {
                     </thead>
                     <tbody>
                       {filteredRows.map((row) => {
-                        const isSelected = selectedRow === row.id
-                        const isChecked = Boolean(checkedRows[row.id])
-                        const isActive =
-                          isSelected || isChecked || activePlaybackRowId === row.id
+                        const isPlaybackActive = activePlaybackRowId === row.id
                         const activeRowNotes = noteBadges.filter(
                           (note) => rowAssignedNotes[row.id]?.[note.id],
                         )
@@ -3299,13 +3304,19 @@ function AnnotationPageContent() {
                           speakerColor.selectedRing || 'ring-slate-200'
                         const selectedShadowClass =
                           speakerColor.selectedShadow || 'shadow-slate-100'
-                        const rowBgClass = isActive ? selectedBgClass : speakerColor.rowBg
-                        const hoverBgClass = isActive ? '' : speakerColor.hoverBg
-                        const stickyBgClass = isActive
+                        const rowBgClass = isPlaybackActive
+                          ? selectedBgClass
+                          : speakerColor.rowBg
+                        const rowHoverBgClass = isPlaybackActive
+                          ? ''
+                          : speakerColor.hoverBg
+                        const stickyBgClass = isPlaybackActive
                           ? selectedStickyBgClass
-                          : `${speakerColor.stickyBg} ${speakerColor.hoverBg}`
-                        const borderClass = isActive ? selectedBorderClass : speakerColor.border
-                        const selectedClasses = isActive
+                          : `${speakerColor.stickyBg} ${speakerColor.groupHoverBg}`
+                        const borderClass = isPlaybackActive
+                          ? selectedBorderClass
+                          : speakerColor.border
+                        const playbackClasses = isPlaybackActive
                           ? `ring-1 ${selectedRingClass} shadow-sm ${selectedShadowClass}`
                           : ''
                         return (
@@ -3320,12 +3331,10 @@ function AnnotationPageContent() {
                             onMouseEnter={(event) => handleRowPointerDrag(row.id, event)}
                             onMouseMove={(event) => handleRowPointerDrag(row.id, event)}
                             onMouseUp={() => handleRowMouseUp(row.id)}
-                            className={`group cursor-pointer rounded-2xl border text-sm text-slate-700 transition ${borderClass} ${rowBgClass} ${hoverBgClass} ${selectedClasses} ${
-                              isActive ? '' : 'hover:border-indigo-200/60'
-                            }`}
+                            className={`group cursor-pointer rounded-2xl border text-sm text-slate-700 transition-colors ${borderClass} ${rowBgClass} ${rowHoverBgClass} ${playbackClasses}`}
                           >
                             <td
-                              className={`sticky left-0 z-10 rounded-l-2xl px-3 py-4 ${stickyBgClass}`}
+                              className={`sticky left-0 z-10 rounded-l-2xl px-3 py-4 transition-colors ${stickyBgClass}`}
                               style={{
                                 width: lineColumnWidth,
                                 minWidth: lineColumnWidth,
@@ -3357,7 +3366,7 @@ function AnnotationPageContent() {
                             </td>
                             {visibleColumns.speaker && (
                               <td
-                                className={`sticky z-10 px-3 py-4 ${stickyBgClass} min-w-0`}
+                                className={`sticky z-10 min-w-0 px-3 py-4 transition-colors ${stickyBgClass}`}
                                 style={{
                                   left: lineColumnWidth,
                                   width: speakerColumnWidth,

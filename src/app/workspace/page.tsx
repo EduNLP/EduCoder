@@ -92,7 +92,7 @@ const formatRelativeTime = (value: string | null) => {
 export default function DashboardPage() {
   const router = useRouter()
   const { isLoaded: authLoaded, isSignedIn } = useAuth()
-  const { isLoaded: userLoaded } = useUser()
+  const { isLoaded: userLoaded, user } = useUser()
   const { theme } = useTheme()
   const [toolbarVisible, setToolbarVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -115,6 +115,10 @@ export default function DashboardPage() {
       return matchesStatus && matchesQuery
     })
   }, [searchQuery, statusFilter, transcripts])
+
+  const role = (user?.publicMetadata?.role as string | undefined) ?? null
+  const isAdmin = role === 'admin'
+  const showAdminImportDemoButton = !isLoading && transcripts.length === 0 && isAdmin
 
   const pageBackgroundStyle = useMemo(
     () => ({
@@ -394,14 +398,26 @@ export default function DashboardPage() {
               <div className="col-span-full flex flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-8 text-center">
                 <p className="text-base font-semibold text-slate-900">
                   {transcripts.length === 0
-                    ? 'No transcripts have been assigned to you yet.'
+                    ? isAdmin
+                      ? 'No tasks are assigned to you yet.'
+                      : 'No transcripts have been assigned to you yet.'
                     : 'No transcripts match your filters.'}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   {transcripts.length === 0
-                    ? 'Check back later or ask an admin to assign a transcript.'
+                    ? isAdmin
+                      ? 'Import demo files to quickly explore the workspace.'
+                      : 'Check back later or ask an admin to assign a transcript.'
                     : 'Try clearing the search or switching status filters.'}
                 </p>
+                {showAdminImportDemoButton && (
+                  <button
+                    type="button"
+                    className="mt-6 inline-flex items-center justify-center rounded-2xl border border-indigo-300 bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  >
+                    Import demo files
+                  </button>
+                )}
               </div>
             )}
           </div>
