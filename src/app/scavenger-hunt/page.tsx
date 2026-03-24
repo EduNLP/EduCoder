@@ -3229,10 +3229,11 @@ function ScavengerHuntPageContent() {
                           <ChevronLeft className="h-4 w-4" />
                         </button>
                         <div className="min-w-0 flex-1 text-center">
-                          <p className="truncate text-sm font-semibold text-slate-900">
-                            {activeInstructionCard.title ||
-                              `Instructional material ${activeInstructionSlideIndex + 1}`}
-                          </p>
+                          {activeInstructionCard.title?.trim() && (
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {activeInstructionCard.title}
+                            </p>
+                          )}
                           {activeInstructionCard.description?.trim() && (
                             <p className="mt-1 text-xs text-slate-500">
                               {activeInstructionCard.description}
