@@ -166,6 +166,7 @@ type ScavengerQuestionResponse = {
       orderIndex: number
       answer?: string | null
       selectedLineIds?: string[]
+      selectedNoteIds?: string[]
     }>
   } | null
   error?: string
@@ -177,6 +178,7 @@ type SaveScavengerAnswerResponse = {
     questionId: string
     answer: string
     selectedLineIds: string[]
+    selectedNoteIds: string[]
     updatedAt: string | null
   }
   error?: string
@@ -198,6 +200,7 @@ type ScavengerQuestion = {
 type ScavengerAnswerDraft = {
   answer: string
   selectedLineIds: string[]
+  selectedNoteIds: string[]
 }
 
 type SpeakerColor = {
@@ -344,6 +347,18 @@ const badgeToneStyles: Record<'indigo' | 'emerald' | 'amber', string> = {
   amber: 'border-amber-200 bg-amber-50 text-amber-700',
 }
 
+const noteSelectedCardToneStyles: Record<'indigo' | 'emerald' | 'amber', string> = {
+  indigo: 'border-indigo-200 bg-indigo-50/80',
+  emerald: 'border-emerald-200 bg-emerald-50/80',
+  amber: 'border-amber-200 bg-amber-50/80',
+}
+
+const noteSelectedCheckToneStyles: Record<'indigo' | 'emerald' | 'amber', string> = {
+  indigo: 'border-indigo-500 bg-indigo-500 text-white',
+  emerald: 'border-emerald-500 bg-emerald-500 text-white',
+  amber: 'border-amber-500 bg-amber-500 text-white',
+}
+
 const WHITE_VIDEO_POSTER =
   'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22%3E%3Crect width=%2216%22 height=%229%22 fill=%22white%22/%3E%3C/svg%3E'
 
@@ -368,10 +383,13 @@ const formatTimestamp = (value: number | null) => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
+const getNoteLabel = (note: Pick<NoteEntry, 'number' | 'title'>) =>
+  note.title.trim() || `Note ${note.number}`
+
 const createNoteBadges = (notes: NoteEntry[]) =>
   notes.map((note, index) => ({
     id: note.id,
-    label: note.title.trim() || `Note ${note.number}`,
+    label: getNoteLabel(note),
     colorClass: NOTE_BADGE_COLORS[index % NOTE_BADGE_COLORS.length],
     number: note.number,
     q1: note.q1,
@@ -417,6 +435,7 @@ const createDefaultScavengerQuestions = (): ScavengerQuestion[] =>
 const createEmptyScavengerAnswerDraft = (): ScavengerAnswerDraft => ({
   answer: '',
   selectedLineIds: [],
+  selectedNoteIds: [],
 })
 
 const normalizeLineIds = (lineIds: string[]) =>
@@ -427,6 +446,7 @@ const normalizeScavengerDraft = (
 ): ScavengerAnswerDraft => ({
   answer: draft.answer,
   selectedLineIds: normalizeLineIds(draft.selectedLineIds),
+  selectedNoteIds: normalizeLineIds(draft.selectedNoteIds),
 })
 
 const cloneScavengerDraft = (
@@ -434,6 +454,7 @@ const cloneScavengerDraft = (
 ): ScavengerAnswerDraft => ({
   answer: draft.answer,
   selectedLineIds: [...draft.selectedLineIds],
+  selectedNoteIds: [...draft.selectedNoteIds],
 })
 
 const cloneScavengerDraftMap = (
@@ -454,7 +475,15 @@ const areScavengerDraftsEqual = (
   if (first.selectedLineIds.length !== second.selectedLineIds.length) {
     return false
   }
-  return first.selectedLineIds.every((lineId, index) => lineId === second.selectedLineIds[index])
+  if (
+    !first.selectedLineIds.every((lineId, index) => lineId === second.selectedLineIds[index])
+  ) {
+    return false
+  }
+  if (first.selectedNoteIds.length !== second.selectedNoteIds.length) {
+    return false
+  }
+  return first.selectedNoteIds.every((noteId, index) => noteId === second.selectedNoteIds[index])
 }
 
 const buildScavengerDraftMap = (
@@ -471,7 +500,9 @@ type NotePanelProps = {
   notes: NoteEntry[]
   badgeTone?: 'indigo' | 'emerald' | 'amber'
   expandedNotes: Record<string, boolean>
+  selectedNotes: Record<string, boolean>
   onToggleExpanded: (noteId: string) => void
+  onToggleSelected: (noteId: string) => void
   emptyState: string
   className?: string
 }
@@ -482,7 +513,9 @@ function NotePanel({
   notes,
   badgeTone = 'indigo',
   expandedNotes,
+  selectedNotes,
   onToggleExpanded,
+  onToggleSelected,
   emptyState,
   className,
 }: NotePanelProps) {
@@ -511,27 +544,50 @@ function NotePanel({
         ) : (
           notes.map((note) => {
             const isExpanded = Boolean(expandedNotes[note.id])
+            const isSelected = Boolean(selectedNotes[note.id])
+            const noteLabel = getNoteLabel(note)
             return (
               <div
                 key={note.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50/80 transition"
+                className={`rounded-2xl border transition ${
+                  isSelected
+                    ? noteSelectedCardToneStyles[badgeTone]
+                    : 'border-slate-200 bg-slate-50/80'
+                }`}
               >
-                <button
-                  type="button"
-                  onClick={() => onToggleExpanded(note.id)}
-                  aria-expanded={isExpanded}
-                  className="flex w-full items-center px-3 py-3 text-left"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{note.title}</p>
-                  </div>
-                  <ChevronDown
-                    className={`h-4 w-4 text-slate-400 transition-transform ${
-                      isExpanded ? 'rotate-180' : ''
+                <div className="flex items-center gap-2 px-3 py-3">
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelected(note.id)}
+                    aria-pressed={isSelected}
+                    aria-label={`${isSelected ? 'Deselect' : 'Select'} ${noteLabel}`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+                      isSelected
+                        ? noteSelectedCheckToneStyles[badgeTone]
+                        : 'border-slate-300 bg-white text-transparent hover:border-slate-400'
                     }`}
-                    aria-hidden="true"
-                  />
-                </button>
+                  >
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleExpanded(note.id)}
+                    aria-expanded={isExpanded}
+                    className="flex min-w-0 flex-1 items-center text-left"
+                  >
+                    <div className="flex-1 truncate">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {noteLabel}
+                      </p>
+                    </div>
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-400 transition-transform ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
                 {isExpanded && (
                   <div className="border-t border-slate-200/70 px-3 py-3">
                     <div className="divide-y divide-slate-200/60">
@@ -600,6 +656,7 @@ function ScavengerHuntPageContent() {
     null,
   )
   const [showSavedBadge, setShowSavedBadge] = useState(false)
+  const [isSelectionSummaryExpanded, setIsSelectionSummaryExpanded] = useState(false)
   const [isMarkingScavengerComplete, setIsMarkingScavengerComplete] = useState(false)
   const [scavengerCompletionError, setScavengerCompletionError] = useState<string | null>(
     null,
@@ -717,6 +774,26 @@ function ScavengerHuntPageContent() {
         return acc
       }, {} as Record<string, boolean>),
     [currentQuestionDraft.selectedLineIds],
+  )
+  const selectedNoteIdsSet = useMemo(
+    () => new Set(currentQuestionDraft.selectedNoteIds),
+    [currentQuestionDraft.selectedNoteIds],
+  )
+  const selectedUserNotes = useMemo(
+    () =>
+      userNotes.reduce((acc, note) => {
+        acc[note.id] = selectedNoteIdsSet.has(note.id)
+        return acc
+      }, {} as Record<string, boolean>),
+    [selectedNoteIdsSet, userNotes],
+  )
+  const selectedLlmNotes = useMemo(
+    () =>
+      llmNotes.reduce((acc, note) => {
+        acc[note.id] = selectedNoteIdsSet.has(note.id)
+        return acc
+      }, {} as Record<string, boolean>),
+    [llmNotes, selectedNoteIdsSet],
   )
 
   const isScavengerComplete = Boolean(transcriptMeta?.scavengerCompleted)
@@ -1085,6 +1162,7 @@ function ScavengerHuntPageContent() {
               questionId: question.id,
               answer: normalizedDraft.answer,
               lineIds: normalizedDraft.selectedLineIds,
+              noteIds: normalizedDraft.selectedNoteIds,
             }),
             signal: controller.signal,
           },
@@ -1103,6 +1181,8 @@ function ScavengerHuntPageContent() {
           answer: payload.answer?.answer ?? normalizedDraft.answer,
           selectedLineIds:
             payload.answer?.selectedLineIds ?? normalizedDraft.selectedLineIds,
+          selectedNoteIds:
+            payload.answer?.selectedNoteIds ?? normalizedDraft.selectedNoteIds,
         })
 
         savedAnswersByQuestionRef.current[question.key] = cloneScavengerDraft(savedDraft)
@@ -1247,13 +1327,55 @@ function ScavengerHuntPageContent() {
     [checkedRows, transcriptRows],
   )
 
-  const selectedLineText =
-    selectedRows.length > 0
-      ? selectedRows
-          .map((row) => Number.parseInt(row.line, 10))
-          .filter((line) => Number.isFinite(line))
-          .join(', ')
-      : 'None'
+  const selectedLineChipLabels = useMemo(
+    () =>
+      selectedRows.map((row) => {
+        const parsedLineNumber = Number.parseInt(row.line, 10)
+        return Number.isFinite(parsedLineNumber)
+          ? `Line ${parsedLineNumber}`
+          : `Line ${row.line}`
+      }),
+    [selectedRows],
+  )
+
+  const selectedUserNoteChips = useMemo(
+    () =>
+      userNotes
+        .filter((note) => selectedUserNotes[note.id])
+        .map((note) => ({
+          id: note.id,
+          label: getNoteLabel(note),
+        })),
+    [selectedUserNotes, userNotes],
+  )
+
+  const selectedLlmNoteChips = useMemo(
+    () =>
+      llmNotes
+        .filter((note) => selectedLlmNotes[note.id])
+        .map((note) => ({
+          id: note.id,
+          label: getNoteLabel(note),
+        })),
+    [llmNotes, selectedLlmNotes],
+  )
+
+  const selectedLineCount = selectedLineChipLabels.length
+  const selectedNoteCount = selectedUserNoteChips.length + selectedLlmNoteChips.length
+  const hasSelectedReferences = selectedLineCount > 0 || selectedNoteCount > 0
+  const selectionSummaryParts = [
+    selectedLineCount > 0
+      ? `${selectedLineCount} ${selectedLineCount === 1 ? 'line' : 'lines'}`
+      : null,
+    selectedNoteCount > 0
+      ? `${selectedNoteCount} ${selectedNoteCount === 1 ? 'note' : 'notes'}`
+      : null,
+  ].filter((part): part is string => Boolean(part))
+  const selectionSummaryText =
+    !hasSelectedReferences
+      ? 'No references selected'
+      : `${selectionSummaryParts.join(' · ')} selected`
+
   const hasInstructionCards = instructionCards.length > 0
   const activeInstructionCard = hasInstructionCards
     ? instructionCards[Math.min(activeInstructionSlideIndex, instructionCards.length - 1)] ?? null
@@ -1519,6 +1641,35 @@ function ScavengerHuntPageContent() {
     }))
   }, [])
 
+  const toggleNoteSelection = useCallback(
+    (noteId: string) => {
+      updateCurrentQuestionDraft((draft) => {
+        const isSelected = draft.selectedNoteIds.includes(noteId)
+        return {
+          ...draft,
+          selectedNoteIds: isSelected
+            ? draft.selectedNoteIds.filter((currentNoteId) => currentNoteId !== noteId)
+            : [...draft.selectedNoteIds, noteId],
+        }
+      })
+    },
+    [updateCurrentQuestionDraft],
+  )
+
+  const handleUserNoteSelectToggle = useCallback(
+    (noteId: string) => {
+      toggleNoteSelection(noteId)
+    },
+    [toggleNoteSelection],
+  )
+
+  const handleLlmNoteSelectToggle = useCallback(
+    (noteId: string) => {
+      toggleNoteSelection(noteId)
+    },
+    [toggleNoteSelection],
+  )
+
   const handleVideoPlayClick = () => {
     const videoElement = videoRef.current
     if (!videoElement) return
@@ -1697,6 +1848,7 @@ function ScavengerHuntPageContent() {
     answersByQuestionRef.current = defaultDrafts
     savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
     setQuestionIndex(0)
+    setIsSelectionSummaryExpanded(false)
 
     try {
       const transcriptResponse = await fetch(
@@ -1919,10 +2071,16 @@ function ScavengerHuntPageContent() {
                       (lineId): lineId is string => typeof lineId === 'string',
                     )
                   : []
+                const selectedNoteIds = Array.isArray(payloadQuestion?.selectedNoteIds)
+                  ? payloadQuestion.selectedNoteIds.filter(
+                      (noteId): noteId is string => typeof noteId === 'string',
+                    )
+                  : []
 
                 acc[question.key] = normalizeScavengerDraft({
                   answer: typeof rawAnswer === 'string' ? rawAnswer : '',
                   selectedLineIds,
+                  selectedNoteIds,
                 })
 
                 return acc
@@ -2075,6 +2233,7 @@ function ScavengerHuntPageContent() {
       answersByQuestionRef.current = defaultDrafts
       savedAnswersByQuestionRef.current = cloneScavengerDraftMap(defaultDrafts)
       setQuestionIndex(0)
+      setIsSelectionSummaryExpanded(false)
       setIsLoadingTranscript(false)
       setNotesError(null)
       setTranscriptError('Open Scavenger Hunt from Annotate so a transcript can be loaded.')
@@ -2457,11 +2616,81 @@ function ScavengerHuntPageContent() {
 
             <p className="mt-2 text-sm text-slate-600">{currentQuestionPrompt}</p>
 
-            <div className="mt-3 text-xs text-slate-500">
-              <span className="font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Selected lines:
-              </span>{' '}
-              {selectedLineText}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setIsSelectionSummaryExpanded((isExpanded) => !isExpanded)
+                }
+                aria-expanded={isSelectionSummaryExpanded}
+                aria-controls="selection-summary-details"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                <span>{selectionSummaryText}</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${
+                    isSelectionSummaryExpanded ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+              {isSelectionSummaryExpanded && (
+                <div
+                  id="selection-summary-details"
+                  className="mt-2 space-y-1 rounded-2xl border border-slate-200/80 bg-slate-50/70 px-3 py-2 text-xs text-slate-500"
+                >
+                  {hasSelectedReferences ? (
+                    <div className="space-y-2">
+                      {selectedLineChipLabels.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            Lines
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedLineChipLabels.map((lineLabel, index) => (
+                              <span
+                                key={`${lineLabel}-${index}`}
+                                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+                              >
+                                {lineLabel}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {selectedNoteCount > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            Notes
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedUserNoteChips.map((note) => (
+                              <span
+                                key={note.id}
+                                className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                              >
+                                {note.label}
+                              </span>
+                            ))}
+                            {selectedLlmNoteChips.map((note) => (
+                              <span
+                                key={note.id}
+                                className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700"
+                              >
+                                {note.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-600">
+                      Select lines or notes to attach them to this response.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <textarea
@@ -3117,7 +3346,9 @@ function ScavengerHuntPageContent() {
             notes={userNotes}
             badgeTone="emerald"
             expandedNotes={expandedUserNotes}
+            selectedNotes={selectedUserNotes}
             onToggleExpanded={handleUserNoteBadgeToggle}
+            onToggleSelected={handleUserNoteSelectToggle}
             emptyState="No personal notes were found for this transcript."
           />
 
@@ -3127,7 +3358,9 @@ function ScavengerHuntPageContent() {
             notes={llmNotes}
             badgeTone="indigo"
             expandedNotes={expandedLlmNotes}
+            selectedNotes={selectedLlmNotes}
             onToggleExpanded={handleLlmNoteBadgeToggle}
+            onToggleSelected={handleLlmNoteSelectToggle}
             emptyState="No LLM notes were found for this transcript."
           />
         </section>

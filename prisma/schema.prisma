@@ -93,6 +93,7 @@ model Notes {
   user          User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
   transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
   assignments   NoteAssignments[]
+  scavengerHuntAnswerNotes ScavengerHuntAnswerNotes[]
 
   @@map("Notes")
 }
@@ -135,6 +136,8 @@ model Annotations {
   created_for   String            @db.Uuid
   hide                 Boolean?          @default(false)
   annotation_completed Boolean           @default(false)
+  exit_ticket_response String?           @db.Text
+  llm_exit_ticket_response String?       @db.Text
   llm_annotation_visibility_admin LLMAnnotationVisibilityAdmin @default(hidden)
   llm_annotation_visibility_user  Boolean @default(true)
   gcs_path             String            @db.Text
@@ -209,9 +212,21 @@ model ScavengerHuntAnswer {
   assignment ScavengerHuntAssignment @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
   question   ScavengerHuntQuestion   @relation(fields: [question_id], references: [id], onDelete: Cascade)
   lines      ScavengerHuntAnswerLines[]
+  notes      ScavengerHuntAnswerNotes[]
 
   @@unique([assignment_id, question_id])
   @@map("ScavengerHuntAnswers")
+}
+
+model ScavengerHuntAnswerNotes {
+  answer_id String @db.Uuid
+  note_id   String @db.Uuid
+
+  answer ScavengerHuntAnswer @relation(fields: [answer_id], references: [id], onDelete: Cascade)
+  note   Notes               @relation(fields: [note_id], references: [note_id], onDelete: Cascade)
+
+  @@id([answer_id, note_id])
+  @@map("ScavengerHuntAnswerNotes")
 }
 
 model ScavengerHuntAnswerLines {

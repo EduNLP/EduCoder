@@ -15,6 +15,7 @@ type SaveScavengerAnswerPayload = {
   questionId?: string
   answer?: string
   lineIds?: string[]
+  noteIds?: string[]
 }
 
 type UpdateScavengerCompletionPayload = {
@@ -132,6 +133,11 @@ export async function GET(request: Request, context: RouteContext) {
                 line_id: true,
               },
             },
+            notes: {
+              select: {
+                note_id: true,
+              },
+            },
           },
         },
       },
@@ -142,6 +148,7 @@ export async function GET(request: Request, context: RouteContext) {
         acc[answer.question_id] = {
           answer: answer.answer ?? '',
           selectedLineIds: answer.lines.map((line) => line.line_id),
+          selectedNoteIds: answer.notes.map((note) => note.note_id),
         }
         return acc
       },
@@ -150,6 +157,7 @@ export async function GET(request: Request, context: RouteContext) {
         {
           answer: string
           selectedLineIds: string[]
+          selectedNoteIds: string[]
         }
       >,
     )
@@ -166,6 +174,7 @@ export async function GET(request: Request, context: RouteContext) {
           orderIndex: question.order_index,
           answer: answersByQuestionId[question.id]?.answer ?? '',
           selectedLineIds: answersByQuestionId[question.id]?.selectedLineIds ?? [],
+          selectedNoteIds: answersByQuestionId[question.id]?.selectedNoteIds ?? [],
         })),
       },
     })
@@ -293,6 +302,9 @@ export async function POST(request: Request, context: RouteContext) {
     const lineIds = Array.isArray(body?.lineIds)
       ? body.lineIds.filter((lineId): lineId is string => typeof lineId === 'string')
       : []
+    const noteIds = Array.isArray(body?.noteIds)
+      ? body.noteIds.filter((noteId): noteId is string => typeof noteId === 'string')
+      : []
 
     if (!questionId) {
       return NextResponse.json(
@@ -303,6 +315,9 @@ export async function POST(request: Request, context: RouteContext) {
 
     const uniqueLineIds = Array.from(
       new Set(lineIds.map((lineId) => lineId.trim()).filter(Boolean)),
+    )
+    const uniqueNoteIds = Array.from(
+      new Set(noteIds.map((noteId) => noteId.trim()).filter(Boolean)),
     )
 
     const { userId: authUserId } = await auth()
@@ -374,6 +389,26 @@ export async function POST(request: Request, context: RouteContext) {
       }
     }
 
+    if (uniqueNoteIds.length > 0) {
+      const validNotes = await prisma.notes.findMany({
+        where: {
+          transcript_id: transcriptId,
+          note_id: { in: uniqueNoteIds },
+          OR: [{ source: 'llm' }, { user_id: annotator.id }],
+        },
+        select: {
+          note_id: true,
+        },
+      })
+
+      if (validNotes.length !== uniqueNoteIds.length) {
+        return NextResponse.json(
+          { success: false, error: 'One or more selected notes are invalid.' },
+          { status: 400 },
+        )
+      }
+    }
+
     const savedAnswer = await prisma.$transaction(async (tx) => {
       const scavengerAssignment =
         (await tx.scavengerHuntAssignment.findFirst({
@@ -405,7 +440,7 @@ export async function POST(request: Request, context: RouteContext) {
         },
       })
 
-      if (!answer && uniqueLineIds.length === 0) {
+      if (!answer && uniqueLineIds.length === 0 && uniqueNoteIds.length === 0) {
         if (existingAnswer) {
           await tx.scavengerHuntAnswer.delete({
             where: { id: existingAnswer.id },
@@ -415,6 +450,7 @@ export async function POST(request: Request, context: RouteContext) {
           questionId: question.id,
           answer: '',
           selectedLineIds: [],
+          selectedNoteIds: [],
           updatedAt: null,
         }
       }
@@ -455,10 +491,24 @@ export async function POST(request: Request, context: RouteContext) {
         })
       }
 
+      await tx.scavengerHuntAnswerNotes.deleteMany({
+        where: { answer_id: answerRecord.id },
+      })
+
+      if (uniqueNoteIds.length > 0) {
+        await tx.scavengerHuntAnswerNotes.createMany({
+          data: uniqueNoteIds.map((noteId) => ({
+            answer_id: answerRecord.id,
+            note_id: noteId,
+          })),
+        })
+      }
+
       return {
         questionId: question.id,
         answer: answerRecord.answer ?? '',
         selectedLineIds: uniqueLineIds,
+        selectedNoteIds: uniqueNoteIds,
         updatedAt: answerRecord.updatedAt?.toISOString?.() ?? null,
       }
     })
