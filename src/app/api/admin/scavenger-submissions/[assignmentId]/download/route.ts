@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { Prisma } from '@prisma/client'
 import { utils, write } from 'xlsx'
 
 import { prisma } from '@/lib/prisma'
@@ -19,6 +20,42 @@ type SupportingLine = {
     speaker: string | null
     utterance: string | null
   } | null
+}
+
+type SupportingNote = {
+  note_id: string
+  note: {
+    note_number: number
+    source: 'user' | 'llm'
+    title: string
+    q1: string
+    q2: string
+    q3: string
+  } | null
+}
+
+type AssignmentRecord = {
+  scavenger: {
+    transcript: {
+      title: string | null
+      workspace_id: string
+    }
+    questions: Array<{
+      id: string
+      question: string
+      order_index: number
+    }>
+  }
+  user: {
+    name: string
+    username: string
+  } | null
+  answers: Array<{
+    question_id: string
+    answer: string | null
+    lines: SupportingLine[]
+    notes?: SupportingNote[]
+  }>
 }
 
 const sanitizeFileName = (value: string, fallback: string) => {
@@ -97,6 +134,75 @@ const normalizeSupportingLines = (lines: SupportingLine[]) => {
   )
 }
 
+const normalizeSupportingNotes = (notes: SupportingNote[]) => {
+  const uniqueByNoteId = new Map<
+    string,
+    {
+      noteNumber: number | null
+      source: string
+      title: string
+      q1: string
+      q2: string
+      q3: string
+    }
+  >()
+
+  for (const selectedNote of notes) {
+    if (uniqueByNoteId.has(selectedNote.note_id)) {
+      continue
+    }
+
+    if (!selectedNote.note) {
+      uniqueByNoteId.set(selectedNote.note_id, {
+        noteNumber: null,
+        source: '',
+        title: selectedNote.note_id,
+        q1: '',
+        q2: '',
+        q3: '',
+      })
+      continue
+    }
+
+    const title =
+      selectedNote.note.title?.trim() || `Note ${selectedNote.note.note_number}`
+
+    uniqueByNoteId.set(selectedNote.note_id, {
+      noteNumber: selectedNote.note.note_number,
+      source: selectedNote.note.source === 'llm' ? 'LLM' : 'Annotator',
+      title,
+      q1: selectedNote.note.q1 ?? '',
+      q2: selectedNote.note.q2 ?? '',
+      q3: selectedNote.note.q3 ?? '',
+    })
+  }
+
+  return Array.from(uniqueByNoteId.values()).sort((a, b) => {
+    if (a.noteNumber === null && b.noteNumber === null) {
+      return a.title.localeCompare(b.title)
+    }
+    if (a.noteNumber === null) {
+      return 1
+    }
+    if (b.noteNumber === null) {
+      return -1
+    }
+    return a.noteNumber - b.noteNumber
+  })
+}
+
+const canFallbackWithoutNotes = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    return true
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2021' || error.code === 'P2022'
+  }
+
+  return false
+}
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const assignmentId = await resolveAssignmentId(request, context)
@@ -126,53 +232,126 @@ export async function GET(request: Request, context: RouteContext) {
       )
     }
 
-    const assignment = await prisma.scavengerHuntAssignment.findUnique({
-      where: { id: assignmentId },
-      select: {
-        scavenger: {
-          select: {
-            transcript: {
-              select: {
-                title: true,
-                workspace_id: true,
+    let noteSelectionSupported = true
+    let assignment: AssignmentRecord | null = null
+
+    try {
+      assignment = await prisma.scavengerHuntAssignment.findUnique({
+        where: { id: assignmentId },
+        select: {
+          scavenger: {
+            select: {
+              transcript: {
+                select: {
+                  title: true,
+                  workspace_id: true,
+                },
               },
-            },
-            questions: {
-              orderBy: { order_index: 'asc' },
-              select: {
-                id: true,
-                question: true,
-                order_index: true,
+              questions: {
+                orderBy: { order_index: 'asc' },
+                select: {
+                  id: true,
+                  question: true,
+                  order_index: true,
+                },
               },
             },
           },
-        },
-        user: {
-          select: {
-            name: true,
-            username: true,
+          user: {
+            select: {
+              name: true,
+              username: true,
+            },
           },
-        },
-        answers: {
-          select: {
-            question_id: true,
-            answer: true,
-            lines: {
-              select: {
-                line_id: true,
-                line: {
-                  select: {
-                    line: true,
-                    speaker: true,
-                    utterance: true,
+          answers: {
+            select: {
+              question_id: true,
+              answer: true,
+              lines: {
+                select: {
+                  line_id: true,
+                  line: {
+                    select: {
+                      line: true,
+                      speaker: true,
+                      utterance: true,
+                    },
+                  },
+                },
+              },
+              notes: {
+                select: {
+                  note_id: true,
+                  note: {
+                    select: {
+                      note_number: true,
+                      source: true,
+                      title: true,
+                      q1: true,
+                      q2: true,
+                      q3: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    })
+      })
+    } catch (error) {
+      if (!canFallbackWithoutNotes(error)) {
+        throw error
+      }
+
+      noteSelectionSupported = false
+      assignment = await prisma.scavengerHuntAssignment.findUnique({
+        where: { id: assignmentId },
+        select: {
+          scavenger: {
+            select: {
+              transcript: {
+                select: {
+                  title: true,
+                  workspace_id: true,
+                },
+              },
+              questions: {
+                orderBy: { order_index: 'asc' },
+                select: {
+                  id: true,
+                  question: true,
+                  order_index: true,
+                },
+              },
+            },
+          },
+          user: {
+            select: {
+              name: true,
+              username: true,
+            },
+          },
+          answers: {
+            select: {
+              question_id: true,
+              answer: true,
+              lines: {
+                select: {
+                  line_id: true,
+                  line: {
+                    select: {
+                      line: true,
+                      speaker: true,
+                      utterance: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    }
 
     if (!assignment) {
       return NextResponse.json(
@@ -200,6 +379,7 @@ export async function GET(request: Request, context: RouteContext) {
       {
         answerText: string
         supportingLines: ReturnType<typeof normalizeSupportingLines>
+        supportingNotes: ReturnType<typeof normalizeSupportingNotes>
       }
     >()
 
@@ -207,6 +387,9 @@ export async function GET(request: Request, context: RouteContext) {
       answerByQuestionId.set(answer.question_id, {
         answerText: answer.answer?.trim() ?? '',
         supportingLines: normalizeSupportingLines(answer.lines),
+        supportingNotes: noteSelectionSupported
+          ? normalizeSupportingNotes(answer.notes ?? [])
+          : [],
       })
     }
 
@@ -231,6 +414,32 @@ export async function GET(request: Request, context: RouteContext) {
         })
       } else {
         rows.push(['', '', ''])
+      }
+
+      rows.push([])
+      rows.push(['Supporting Notes'])
+      rows.push([
+        'Note number',
+        'Source',
+        'Title',
+        'What does this tell you about students’ progress towards the lesson goals?',
+        'How might you, as a teacher, respond to this student(s)?',
+        'Additional note context',
+      ])
+
+      if (answer?.supportingNotes.length) {
+        answer.supportingNotes.forEach((note) => {
+          rows.push([
+            note.noteNumber ?? '',
+            note.source,
+            note.title,
+            note.q1,
+            note.q2,
+            note.q3,
+          ])
+        })
+      } else {
+        rows.push(['', '', '', '', '', ''])
       }
 
       const worksheet = utils.aoa_to_sheet(rows)

@@ -8,6 +8,7 @@ export const runtime = 'nodejs'
 type CompletePayload = {
   transcriptId?: string
   completed?: boolean
+  exitTicketResponse?: string
 }
 
 export async function POST(request: Request) {
@@ -17,10 +18,23 @@ export async function POST(request: Request) {
       typeof body?.transcriptId === 'string' ? body.transcriptId.trim() : ''
     const completed =
       typeof body?.completed === 'boolean' ? body.completed : true
+    const exitTicketResponse =
+      typeof body?.exitTicketResponse === 'string'
+        ? body.exitTicketResponse.trim()
+        : ''
 
     if (!transcriptId) {
       return NextResponse.json(
         { success: false, error: 'Transcript id is required.' },
+        { status: 400 },
+      )
+    }
+    if (completed && !exitTicketResponse) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Exit ticket response is required before submission.',
+        },
         { status: 400 },
       )
     }
@@ -69,7 +83,10 @@ export async function POST(request: Request) {
 
     await prisma.annotations.update({
       where: { id: assignment.id },
-      data: { annotation_completed: completed },
+      data: {
+        annotation_completed: completed,
+        ...(completed ? { exit_ticket_response: exitTicketResponse } : {}),
+      },
     })
 
     return NextResponse.json({ success: true })

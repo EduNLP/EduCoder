@@ -1,11 +1,56 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 type SubmissionStatus = 'not_started' | 'in_progress' | 'completed'
+type SubmissionRecord = {
+  id: string
+  scavenger_completed: boolean
+  assigned_time: Date
+  completedAt: Date | null
+  scavenger_visibility_admin: 'hidden' | 'visible_after_completion' | 'always_visible'
+  scavenger_visibility_user: boolean
+  scavenger: {
+    transcript: {
+      id: string
+      title: string
+    }
+    _count: {
+      questions: number
+    }
+  }
+  user: {
+    id: string
+    name: string
+    username: string
+  } | null
+  answers: Array<{
+    answer: string | null
+    updatedAt: Date
+    lines: Array<{
+      line_id: string
+    }>
+    notes?: Array<{
+      note_id: string
+    }>
+  }>
+}
+
+const canFallbackWithoutNotes = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    return true
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2021' || error.code === 'P2022'
+  }
+
+  return false
+}
 
 export async function GET() {
   try {
@@ -32,59 +77,128 @@ export async function GET() {
       )
     }
 
-    const submissions = await prisma.scavengerHuntAssignment.findMany({
-      where: {
-        scavenger: {
-          transcript: {
-            workspace_id: actor.workspace_id,
-          },
-        },
-      },
-      select: {
-        id: true,
-        scavenger_completed: true,
-        assigned_time: true,
-        completedAt: true,
-        scavenger_visibility_admin: true,
-        scavenger_visibility_user: true,
-        scavenger: {
-          select: {
+    let noteSelectionSupported = true
+    let submissions: SubmissionRecord[] = []
+
+    try {
+      submissions = await prisma.scavengerHuntAssignment.findMany({
+        where: {
+          scavenger: {
             transcript: {
-              select: {
-                id: true,
-                title: true,
+              workspace_id: actor.workspace_id,
+            },
+          },
+        },
+        select: {
+          id: true,
+          scavenger_completed: true,
+          assigned_time: true,
+          completedAt: true,
+          scavenger_visibility_admin: true,
+          scavenger_visibility_user: true,
+          scavenger: {
+            select: {
+              transcript: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+              _count: {
+                select: {
+                  questions: true,
+                },
               },
             },
-            _count: {
-              select: {
-                questions: true,
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+          answers: {
+            select: {
+              answer: true,
+              updatedAt: true,
+              lines: {
+                select: {
+                  line_id: true,
+                },
+              },
+              notes: {
+                select: {
+                  note_id: true,
+                },
               },
             },
           },
         },
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
+        orderBy: {
+          assigned_time: 'desc',
+        },
+      })
+    } catch (error) {
+      if (!canFallbackWithoutNotes(error)) {
+        throw error
+      }
+
+      noteSelectionSupported = false
+      submissions = await prisma.scavengerHuntAssignment.findMany({
+        where: {
+          scavenger: {
+            transcript: {
+              workspace_id: actor.workspace_id,
+            },
           },
         },
-        answers: {
-          select: {
-            answer: true,
-            updatedAt: true,
-            lines: {
-              select: {
-                line_id: true,
+        select: {
+          id: true,
+          scavenger_completed: true,
+          assigned_time: true,
+          completedAt: true,
+          scavenger_visibility_admin: true,
+          scavenger_visibility_user: true,
+          scavenger: {
+            select: {
+              transcript: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+              _count: {
+                select: {
+                  questions: true,
+                },
+              },
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+          answers: {
+            select: {
+              answer: true,
+              updatedAt: true,
+              lines: {
+                select: {
+                  line_id: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        assigned_time: 'desc',
-      },
-    })
+        orderBy: {
+          assigned_time: 'desc',
+        },
+      })
+    }
 
     const normalized = submissions.map((submission) => {
       const uniqueLineIds = new Set<string>()
@@ -94,8 +208,9 @@ export async function GET() {
       for (const answer of submission.answers) {
         const hasAnswerText = Boolean(answer.answer?.trim())
         const hasLineSelection = answer.lines.length > 0
+        const hasNoteSelection = noteSelectionSupported && (answer.notes?.length ?? 0) > 0
 
-        if (hasAnswerText || hasLineSelection) {
+        if (hasAnswerText || hasLineSelection || hasNoteSelection) {
           answeredQuestionCount += 1
         }
 

@@ -303,6 +303,9 @@ const createEmptyNewNote = (): NewNoteDraft => ({
   utteranceNote: '',
 })
 
+const EXIT_TICKET_PROMPT =
+  'Before submitting, what is one key instructional move you would take next based on this transcript?'
+
 const createEmptyNoteAssignments = (noteBadges: NoteBadge[]) =>
   noteBadges.reduce((acc, note) => {
     acc[note.id] = false
@@ -545,6 +548,9 @@ function AnnotationPageContent() {
   const [noteSaveErrors, setNoteSaveErrors] = useState<Record<string, string>>({})
   const [flagSaveError, setFlagSaveError] = useState<string | null>(null)
   const [completionError, setCompletionError] = useState<string | null>(null)
+  const [showExitTicketModal, setShowExitTicketModal] = useState(false)
+  const [exitTicketAnswer, setExitTicketAnswer] = useState('')
+  const [exitTicketError, setExitTicketError] = useState<string | null>(null)
   const [llmVisibilityError, setLlmVisibilityError] = useState<string | null>(null)
   const [showSavedBadge, setShowSavedBadge] = useState(false)
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null)
@@ -2407,22 +2413,37 @@ function AnnotationPageContent() {
     router.push('/workspace')
   }
 
-  const handleMarkAnnotationComplete = async (completed: boolean) => {
-    if (isMarkingComplete) return
+  const handleMarkAnnotationComplete = async (
+    completed: boolean,
+    options?: {
+      exitTicketResponse?: string
+      showErrorInModal?: boolean
+    },
+  ) => {
+    if (isMarkingComplete) return false
     const transcriptId = transcriptMeta?.id ?? ''
     if (!transcriptId) {
-      setCompletionError('Select a transcript before updating the status.')
-      return
+      const message = 'Select a transcript before updating the status.'
+      setCompletionError(message)
+      if (options?.showErrorInModal) {
+        setExitTicketError(message)
+      }
+      return false
     }
 
     setIsMarkingComplete(true)
     setCompletionError(null)
+    setExitTicketError(null)
 
     try {
       const response = await fetch('/api/annotator/annotations/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcriptId, completed }),
+        body: JSON.stringify({
+          transcriptId,
+          completed,
+          exitTicketResponse: options?.exitTicketResponse,
+        }),
       })
       const payload: { success?: boolean; error?: string } | null = await response
         .json()
@@ -2439,6 +2460,7 @@ function AnnotationPageContent() {
         previous ? { ...previous, annotationCompleted: completed } : previous,
       )
       triggerSavedBadge()
+      return true
     } catch (error) {
       console.error('Failed to mark annotation as complete', error)
       const message =
@@ -2446,9 +2468,46 @@ function AnnotationPageContent() {
           ? error.message
           : 'Unable to update the annotation completion status.'
       setCompletionError(message)
+      if (options?.showErrorInModal) {
+        setExitTicketError(message)
+      }
+      return false
     } finally {
       setIsMarkingComplete(false)
     }
+  }
+
+  const openExitTicketModal = () => {
+    setExitTicketAnswer('')
+    setExitTicketError(null)
+    setCompletionError(null)
+    setShowExitTicketModal(true)
+  }
+
+  const closeExitTicketModal = () => {
+    if (isMarkingComplete) return
+    setShowExitTicketModal(false)
+    setExitTicketError(null)
+  }
+
+  const handleExitTicketSubmit = async () => {
+    const trimmedAnswer = exitTicketAnswer.trim()
+    if (!trimmedAnswer) {
+      setExitTicketError('Please answer the exit ticket before submitting.')
+      return
+    }
+
+    const didComplete = await handleMarkAnnotationComplete(true, {
+      exitTicketResponse: trimmedAnswer,
+      showErrorInModal: true,
+    })
+    if (!didComplete) {
+      return
+    }
+
+    setShowExitTicketModal(false)
+    setExitTicketAnswer('')
+    setExitTicketError(null)
   }
 
   const handleLlmVisibilityChange = async (visible: boolean) => {
@@ -2561,7 +2620,13 @@ function AnnotationPageContent() {
     }
 
     if (link.id === 'complete') {
-      handleMarkAnnotationComplete(!isAnnotationComplete)
+      if (isAnnotationComplete) {
+        void handleMarkAnnotationComplete(false)
+        return
+      }
+
+      openExitTicketModal()
+      return
     }
 
     if (link.id === 'scavenger-hunt') {
@@ -2758,10 +2823,10 @@ function AnnotationPageContent() {
               </button>
             </div>
             {!instructionCollapsed ? (
-              <div className="mt-4 flex flex-1 flex-col gap-4 overflow-hidden">
+              <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
                 <div
                   ref={instructionScrollRef}
-                  className={`stealth-scrollbar flex-1 space-y-3 overflow-y-auto pr-1 ${
+                  className={`stealth-scrollbar stealth-scrollbar--overlay -mx-4 min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto pl-4 pr-[7px] ${
                     showInstructionScrollbar ? 'stealth-scrollbar--active' : ''
                   }`}
                 >
@@ -4091,6 +4156,77 @@ function AnnotationPageContent() {
             </div>
               )
             })()}
+          </div>
+        )}
+        {showExitTicketModal && (
+          <div
+            className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4 py-8 backdrop-blur-sm"
+            onClick={closeExitTicketModal}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Exit ticket"
+              className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-2xl shadow-slate-900/30"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-500">
+                    Exit ticket
+                  </p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    One more question before you submit
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeExitTicketModal}
+                  disabled={isMarkingComplete}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label="Close exit ticket"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="mt-3 text-sm font-medium text-slate-700">
+                {EXIT_TICKET_PROMPT}
+              </p>
+              <textarea
+                value={exitTicketAnswer}
+                onChange={(event) => setExitTicketAnswer(event.target.value)}
+                placeholder="Type your answer here"
+                rows={5}
+                maxLength={2000}
+                disabled={isMarkingComplete}
+                className="mt-3 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-300 focus:bg-white focus-visible:ring-2 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                <span>Required</span>
+                <span>{exitTicketAnswer.length}/2000</span>
+              </div>
+              {exitTicketError && (
+                <p className="mt-3 text-sm text-rose-600">{exitTicketError}</p>
+              )}
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeExitTicketModal}
+                  disabled={isMarkingComplete}
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleExitTicketSubmit()}
+                  disabled={isMarkingComplete}
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isMarkingComplete ? 'Submitting...' : 'Submit annotation'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {deleteNoteId && (
