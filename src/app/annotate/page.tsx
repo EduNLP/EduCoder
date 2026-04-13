@@ -111,7 +111,6 @@ type InstructionalMaterialResponse = {
 
 type InstructionCard = {
   id: string
-  title: string
   imageUrl: string
   description?: string | null
 }
@@ -560,7 +559,7 @@ function AnnotationPageContent() {
   const [showInstructionScrollbar, setShowInstructionScrollbar] = useState(false)
   const [activeInstructionImage, setActiveInstructionImage] = useState<{
     src: string
-    title: string
+    description: string
   } | null>(null)
   const [isCoarsePointer, setIsCoarsePointer] = useState(false)
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false)
@@ -1408,9 +1407,11 @@ function AnnotationPageContent() {
 
       const normalized = (payload.items ?? []).map((item) => ({
         id: item.id,
-        title: item.image_title?.trim() ?? '',
         imageUrl: item.url,
-        description: item.description ?? null,
+        description:
+          typeof item.description === 'string' && item.description.trim()
+            ? item.description.trim()
+            : null,
       }))
 
       setInstructionCards(normalized)
@@ -1874,7 +1875,10 @@ function AnnotationPageContent() {
     hasVideo && !hasPlayedOnce && showVideoPlayOverlay
 
   const handleInstructionImageClick = useCallback((card: InstructionCard) => {
-    setActiveInstructionImage({ src: card.imageUrl, title: card.title })
+    setActiveInstructionImage({
+      src: card.imageUrl,
+      description: card.description?.trim() ?? '',
+    })
   }, [])
 
   const closeInstructionImage = useCallback(() => {
@@ -2808,7 +2812,7 @@ function AnnotationPageContent() {
                 onClick={() =>
                   setInstructionCollapsed((previous) => !previous)
                 }
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                 aria-label={
                   instructionCollapsed
                     ? 'Expand lesson learning goals'
@@ -2826,7 +2830,7 @@ function AnnotationPageContent() {
               <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4">
                 <div
                   ref={instructionScrollRef}
-                  className={`stealth-scrollbar stealth-scrollbar--overlay -mx-4 min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto pl-4 pr-[7px] ${
+                  className={`stealth-scrollbar stealth-scrollbar--overlay -mx-4 min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto pl-4 pr-[15px] ${
                     showInstructionScrollbar ? 'stealth-scrollbar--active' : ''
                   }`}
                 >
@@ -2846,7 +2850,8 @@ function AnnotationPageContent() {
                     </div>
                   ) : instructionCards.length > 0 ? (
                     instructionCards.map((card) => {
-                      const hasTitle = Boolean(card.title)
+                      const description = card.description?.trim() ?? ''
+                      const hasDescription = Boolean(description)
                       const fallbackLabel = 'Instructional material image'
                       return (
                         <div
@@ -2857,26 +2862,24 @@ function AnnotationPageContent() {
                             type="button"
                             onClick={() => handleInstructionImageClick(card)}
                             className="group relative block w-full overflow-hidden rounded-2xl bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-                            aria-label={
-                              hasTitle ? `View ${card.title}` : 'View instructional material image'
-                            }
+                            aria-label="View instructional material image"
                           >
                             <Image
                               src={card.imageUrl}
-                              alt={hasTitle ? card.title : fallbackLabel}
+                              alt={hasDescription ? description : fallbackLabel}
                               width={320}
                               height={144}
                               className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-105"
                               sizes="(min-width: 1024px) 320px, 100vw"
                             />
                             <span className="sr-only">
-                              {hasTitle ? `Expand ${card.title}` : 'Expand instructional material'}
+                              Expand instructional material
                             </span>
                           </button>
-                          {hasTitle && (
-                            <h3 className="mt-3 text-base font-semibold text-slate-900">
-                              {card.title}
-                            </h3>
+                          {hasDescription && (
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                              {description}
+                            </p>
                           )}
                         </div>
                       )
@@ -2896,7 +2899,8 @@ function AnnotationPageContent() {
                   <p className="text-xs text-slate-500">Loading…</p>
                 ) : instructionCards.length > 0 ? (
                   instructionCards.map((card) => {
-                    const hasTitle = Boolean(card.title)
+                    const description = card.description?.trim() ?? ''
+                    const hasDescription = Boolean(description)
                     const fallbackLabel = 'Instructional material image'
                     return (
                       <button
@@ -2904,14 +2908,12 @@ function AnnotationPageContent() {
                         type="button"
                         onClick={() => handleInstructionImageClick(card)}
                         className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-indigo-200 hover:bg-indigo-50"
-                        title={hasTitle ? card.title : undefined}
-                        aria-label={
-                          hasTitle ? `View ${card.title}` : 'View instructional material image'
-                        }
+                        title={hasDescription ? description : undefined}
+                        aria-label="View instructional material image"
                       >
                         <Image
                           src={card.imageUrl}
-                          alt={hasTitle ? card.title : fallbackLabel}
+                          alt={hasDescription ? description : fallbackLabel}
                           width={44}
                           height={44}
                           className="h-full w-full object-cover"
@@ -3569,7 +3571,7 @@ function AnnotationPageContent() {
               <button
                 type="button"
                 onClick={() => setAnnotationCollapsed(false)}
-                className="flex h-12 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                className="flex h-12 w-full items-center justify-center text-slate-600 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                 aria-label="Expand annotations panel"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -3607,7 +3609,7 @@ function AnnotationPageContent() {
                       onClick={() =>
                         setAnnotationCollapsed((previous) => !previous)
                       }
-                      className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                      className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
                       aria-label="Collapse annotations panel"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -4109,17 +4111,14 @@ function AnnotationPageContent() {
             onClick={closeInstructionImage}
           >
             {(() => {
-              const hasTitle = Boolean(activeInstructionImage.title)
+              const description = activeInstructionImage.description?.trim() ?? ''
+              const hasDescription = Boolean(description)
               const fallbackLabel = 'Instructional material image'
               return (
             <div
               role="dialog"
               aria-modal="true"
-              aria-label={
-                hasTitle
-                  ? `${activeInstructionImage.title} preview`
-                  : 'Instruction image preview'
-              }
+              aria-label={hasDescription ? `${description} preview` : 'Instruction image preview'}
               className="relative w-full max-w-3xl rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-2xl shadow-slate-900/30"
               onClick={(event) => event.stopPropagation()}
             >
@@ -4128,9 +4127,9 @@ function AnnotationPageContent() {
                   <p className="text-xs uppercase tracking-widest text-slate-500">
                     Instruction image
                   </p>
-                  {hasTitle && (
-                    <p className="text-lg font-semibold text-slate-900">
-                      {activeInstructionImage.title}
+                  {hasDescription && (
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                      {description}
                     </p>
                   )}
                 </div>
@@ -4146,7 +4145,7 @@ function AnnotationPageContent() {
               <div className="mt-4 max-h-[70vh] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2">
                 <Image
                   src={activeInstructionImage.src}
-                  alt={hasTitle ? activeInstructionImage.title : fallbackLabel}
+                  alt={hasDescription ? description : fallbackLabel}
                   width={960}
                   height={540}
                   className="mx-auto h-full max-h-[64vh] w-full object-contain"
