@@ -20,8 +20,15 @@ type MaterialResponseItem = {
   order_index: number
   uploaded_at: string
   url: string
+  segment_ids: string[]
   description?: string | null
   original_file_name?: string | null
+}
+
+type SegmentResponseItem = {
+  id: string
+  label: string
+  index: number
 }
 
 type MaterialInput = {
@@ -29,6 +36,7 @@ type MaterialInput = {
   title?: string
   description?: string
   orderIndex?: number
+  segmentIds?: string[]
 }
 
 const parseGcsPath = (uri: string): { bucket: string; object: string } => {
@@ -79,6 +87,9 @@ const parseGcsPath = (uri: string): { bucket: string; object: string } => {
 
 const buildPublicUrl = ({ bucket, object }: { bucket: string; object: string }) =>
   `https://storage.googleapis.com/${bucket}/${object}`
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
 
 const resolveMaterialDetails = async (gcsPath: string): Promise<{
   url: string
@@ -141,24 +152,34 @@ const parseMaterials = (raw: FormDataEntryValue | null): MaterialInput[] => {
     const materials: MaterialInput[] = []
 
     for (const item of parsed) {
-      if (!item || typeof item !== 'object') {
+      if (!isRecord(item)) {
         continue
       }
 
-      const fileField = typeof (item as any).fileField === 'string' ? (item as any).fileField.trim() : ''
+      const fileField = typeof item.fileField === 'string' ? item.fileField.trim() : ''
       if (!fileField) {
         continue
       }
 
-      const title = typeof (item as any).title === 'string' ? (item as any).title.trim() : undefined
+      const title = typeof item.title === 'string' ? item.title.trim() : undefined
       const description =
-        typeof (item as any).description === 'string' ? (item as any).description.trim() : undefined
+        typeof item.description === 'string' ? item.description.trim() : undefined
       const orderIndex =
-        typeof (item as any).orderIndex === 'number' && Number.isFinite((item as any).orderIndex)
-          ? Math.max(0, Math.floor((item as any).orderIndex))
+        typeof item.orderIndex === 'number' && Number.isFinite(item.orderIndex)
+          ? Math.max(0, Math.floor(item.orderIndex))
           : undefined
+      const segmentIds = Array.isArray(item.segmentIds)
+        ? Array.from(
+            new Set(
+              item.segmentIds
+                .filter((segmentId): segmentId is string => typeof segmentId === 'string')
+                .map((segmentId) => segmentId.trim())
+                .filter((segmentId) => segmentId.length > 0),
+            ),
+          )
+        : []
 
-      materials.push({ fileField, title, description, orderIndex })
+      materials.push({ fileField, title, description, orderIndex, segmentIds })
     }
 
     return materials
@@ -228,6 +249,34 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'No instructional materials provided.' }, { status: 400 })
     }
 
+    const requestedSegmentIds = Array.from(
+      new Set(materials.flatMap((material) => material.segmentIds ?? [])),
+    )
+    const validSegmentIds = new Set<string>()
+    if (requestedSegmentIds.length > 0) {
+      const matchingSegments = await prisma.transcriptSegments.findMany({
+        where: {
+          transcript_id: transcript.id,
+          id: {
+            in: requestedSegmentIds,
+          },
+        },
+        select: {
+          id: true,
+        },
+      })
+      matchingSegments.forEach((segment) => {
+        validSegmentIds.add(segment.id)
+      })
+
+      if (validSegmentIds.size !== requestedSegmentIds.length) {
+        return NextResponse.json(
+          { error: 'One or more selected segments are invalid for this transcript.' },
+          { status: 400 },
+        )
+      }
+    }
+
     await prisma.transcripts.update({
       where: { id: transcript.id },
       data: {
@@ -249,6 +298,7 @@ export async function POST(request: Request, context: RouteContext) {
         order_index: typeof item.orderIndex === 'number' ? item.orderIndex : index,
         image_title: trimmedTitle || trimmedDescription || '',
         description: trimmedDescription || undefined,
+        segmentIds: (item.segmentIds ?? []).filter((segmentId) => validSegmentIds.has(segmentId)),
       }
     })
 
@@ -265,14 +315,24 @@ export async function POST(request: Request, context: RouteContext) {
         return {
           image_title: item.image_title,
           order_index: item.order_index,
+          segmentIds: item.segmentIds,
           upload,
         }
       }),
     )
 
-    const created = await prisma.$transaction(
-      uploads.map((item) =>
-        prisma.instructionalMaterial.create({
+    const created = await prisma.$transaction(async (tx) => {
+      const createdItems: Array<{
+        id: string
+        gcs_path: string
+        image_title: string
+        order_index: number
+        uploaded_at: Date
+        segment_ids: string[]
+      }> = []
+
+      for (const item of uploads) {
+        const createdMaterial = await tx.instructionalMaterial.create({
           data: {
             transcript_id: transcript.id,
             gcs_path: item.upload.gcsPath,
@@ -286,9 +346,30 @@ export async function POST(request: Request, context: RouteContext) {
             order_index: true,
             uploaded_at: true,
           },
-        }),
-      ),
-    )
+        })
+
+        if (item.segmentIds.length > 0) {
+          await tx.instructionalMaterialSegment.createMany({
+            data: item.segmentIds.map((segmentId) => ({
+              material_id: createdMaterial.id,
+              segment_id: segmentId,
+            })),
+            skipDuplicates: true,
+          })
+        }
+
+        createdItems.push({
+          id: createdMaterial.id,
+          gcs_path: createdMaterial.gcs_path,
+          image_title: createdMaterial.image_title,
+          order_index: createdMaterial.order_index,
+          uploaded_at: createdMaterial.uploaded_at,
+          segment_ids: item.segmentIds,
+        })
+      }
+
+      return createdItems
+    })
 
     return NextResponse.json(
       {
@@ -341,17 +422,48 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Transcript not found.' }, { status: 404 })
     }
 
-    const materials = await prisma.instructionalMaterial.findMany({
-      where: { transcript_id: transcript.id },
-      select: {
-        id: true,
-        gcs_path: true,
-        image_title: true,
-        order_index: true,
-        uploaded_at: true,
-      },
-      orderBy: { order_index: 'asc' },
-    })
+    const [materials, segments] = await Promise.all([
+      prisma.instructionalMaterial.findMany({
+        where: { transcript_id: transcript.id },
+        select: {
+          id: true,
+          gcs_path: true,
+          image_title: true,
+          order_index: true,
+          uploaded_at: true,
+          segmentLinks: {
+            select: {
+              segment_id: true,
+            },
+          },
+        },
+        orderBy: { order_index: 'asc' },
+      }),
+      prisma.transcriptSegments.findMany({
+        where: { transcript_id: transcript.id },
+        select: {
+          id: true,
+          segment_title: true,
+          segment_index: true,
+        },
+        orderBy: { segment_index: 'asc' },
+      }),
+    ])
+
+    const normalizedSegments: SegmentResponseItem[] = segments
+      .map((segment) => {
+        const label = segment.segment_title.trim()
+        if (!label) {
+          return null
+        }
+
+        return {
+          id: segment.id,
+          label,
+          index: segment.segment_index,
+        }
+      })
+      .filter((segment): segment is SegmentResponseItem => segment !== null)
 
     if (materials.length === 0) {
       return NextResponse.json({
@@ -359,6 +471,7 @@ export async function GET(request: Request, context: RouteContext) {
         transcriptId: transcript.id,
         instructional_material_link: transcript.instructional_material_link,
         items: [],
+        segments: normalizedSegments,
       })
     }
 
@@ -372,6 +485,7 @@ export async function GET(request: Request, context: RouteContext) {
           order_index: material.order_index,
           uploaded_at: material.uploaded_at.toISOString(),
           url: details.url,
+          segment_ids: material.segmentLinks.map((segmentLink) => segmentLink.segment_id),
           description: details.description,
           original_file_name: details.originalFileName,
         }
@@ -383,6 +497,7 @@ export async function GET(request: Request, context: RouteContext) {
       transcriptId: transcript.id,
       instructional_material_link: transcript.instructional_material_link,
       items,
+      segments: normalizedSegments,
     })
   } catch (error) {
     console.error('Failed to fetch instructional materials', error)

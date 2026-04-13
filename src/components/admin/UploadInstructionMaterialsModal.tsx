@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Upload, Image as ImageIcon, Trash2, Plus } from 'lucide-react'
 
 interface InstructionItem {
@@ -9,12 +9,14 @@ interface InstructionItem {
   image: File | null
   imagePreview: string | null
   text: string
+  segmentIds: string[]
 }
 
 interface ExistingInstructionItem {
   id: string
   imageUrl: string
   imageTitle: string
+  segmentIds: string[]
   description?: string | null
   uploadedAt?: string
   orderIndex: number
@@ -27,10 +29,26 @@ type ExistingInstructionApiItem = {
   gcs_path?: string | null
   image_title?: string | null
   title?: string | null
+  segment_ids?: Array<string | null> | null
   description?: string | null
   uploaded_at?: string | null
   order_index?: number | null
   original_file_name?: string | null
+}
+
+type TranscriptSegmentItem = {
+  id: string
+  label: string
+  index: number
+}
+
+type TranscriptSegmentApiItem = {
+  id?: string | number | null
+  label?: string | null
+  title?: string | null
+  segment_title?: string | null
+  index?: number | null
+  segment_index?: number | null
 }
 
 interface UploadInstructionMaterialsModalProps {
@@ -48,8 +66,11 @@ export default function UploadInstructionMaterialsModal({
 }: UploadInstructionMaterialsModalProps) {
   const [instructionalMaterialLink, setInstructionalMaterialLink] = useState('')
   const [items, setItems] = useState<InstructionItem[]>([
-    { id: '1', image: null, imagePreview: null, text: '' }
+    { id: '1', image: null, imagePreview: null, text: '', segmentIds: [] }
   ])
+  const [transcriptSegments, setTranscriptSegments] = useState<TranscriptSegmentItem[]>([])
+  const [openSegmentPickerItemId, setOpenSegmentPickerItemId] = useState<string | null>(null)
+  const openSegmentPickerRef = useRef<HTMLDivElement | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [existingItems, setExistingItems] = useState<ExistingInstructionItem[]>([])
@@ -68,8 +89,10 @@ export default function UploadInstructionMaterialsModal({
 
     setHasCheckedExisting(false)
     setExistingItems([])
+    setTranscriptSegments([])
     setDeleteExistingError(null)
     setIsDeletingExisting(false)
+    setOpenSegmentPickerItemId(null)
 
     let isCancelled = false
     const controller = new AbortController()
@@ -97,30 +120,95 @@ export default function UploadInstructionMaterialsModal({
           const items = payload.items as ExistingInstructionApiItem[]
 
           const normalized = items
-            .map((item): ExistingInstructionItem => ({
-              id: String(item.id ?? ''),
-              imageUrl: String(item.url ?? item.gcs_path ?? ''),
-              imageTitle: String(item.image_title ?? item.title ?? 'Instruction item'),
-              description:
-                typeof item.description === 'string' || item.description === null
-                  ? item.description
-                  : undefined,
-              uploadedAt: typeof item.uploaded_at === 'string' ? item.uploaded_at : undefined,
-              orderIndex:
-                typeof item.order_index === 'number' && Number.isFinite(item.order_index)
-                  ? item.order_index
-                  : 0,
-              fileName:
-                typeof item.original_file_name === 'string'
-                  ? item.original_file_name
-                  : undefined,
-            }))
+            .map((item): ExistingInstructionItem => {
+              const segmentIds = Array.isArray(item.segment_ids)
+                ? Array.from(
+                    new Set(
+                      item.segment_ids
+                        .filter((segmentId): segmentId is string => typeof segmentId === 'string')
+                        .map((segmentId) => segmentId.trim())
+                        .filter((segmentId) => segmentId.length > 0),
+                    ),
+                  )
+                : []
+
+              return {
+                id: String(item.id ?? ''),
+                imageUrl: String(item.url ?? item.gcs_path ?? ''),
+                imageTitle: String(item.image_title ?? item.title ?? 'Instruction item'),
+                segmentIds,
+                description:
+                  typeof item.description === 'string' || item.description === null
+                    ? item.description
+                    : undefined,
+                uploadedAt: typeof item.uploaded_at === 'string' ? item.uploaded_at : undefined,
+                orderIndex:
+                  typeof item.order_index === 'number' && Number.isFinite(item.order_index)
+                    ? item.order_index
+                    : 0,
+                fileName:
+                  typeof item.original_file_name === 'string'
+                    ? item.original_file_name
+                    : undefined,
+              }
+            })
             .filter(
               (item: ExistingInstructionItem): item is ExistingInstructionItem =>
                 Boolean(item.imageUrl) && Boolean(item.id),
             )
 
           setExistingItems(normalized)
+        }
+
+        if (!isCancelled) {
+          const payloadSegments = Array.isArray(payload?.segments)
+            ? (payload.segments as TranscriptSegmentApiItem[])
+            : []
+          const normalizedSegments = payloadSegments
+            .map((segment): TranscriptSegmentItem | null => {
+              const id = String(segment.id ?? '').trim()
+              if (!id) {
+                return null
+              }
+
+              const labelCandidate =
+                typeof segment.label === 'string' && segment.label.trim()
+                  ? segment.label.trim()
+                  : typeof segment.segment_title === 'string' && segment.segment_title.trim()
+                    ? segment.segment_title.trim()
+                    : typeof segment.title === 'string' && segment.title.trim()
+                      ? segment.title.trim()
+                      : null
+
+              const indexCandidate =
+                typeof segment.index === 'number' && Number.isFinite(segment.index)
+                  ? Math.floor(segment.index)
+                  : typeof segment.segment_index === 'number' &&
+                      Number.isFinite(segment.segment_index)
+                    ? Math.floor(segment.segment_index)
+                    : null
+
+              const label =
+                labelCandidate ?? (indexCandidate !== null ? String(indexCandidate) : '')
+              if (!label) {
+                return null
+              }
+
+              return {
+                id,
+                label,
+                index: indexCandidate ?? Number.MAX_SAFE_INTEGER,
+              }
+            })
+            .filter((segment): segment is TranscriptSegmentItem => segment !== null)
+            .sort((segmentA, segmentB) => {
+              if (segmentA.index !== segmentB.index) {
+                return segmentA.index - segmentB.index
+              }
+              return segmentA.label.localeCompare(segmentB.label)
+            })
+
+          setTranscriptSegments(normalizedSegments)
         }
 
         if (!isCancelled) {
@@ -143,6 +231,7 @@ export default function UploadInstructionMaterialsModal({
               : 'Failed to load existing instructional materials.'
           setExistingError(message)
           setExistingItems([])
+          setTranscriptSegments([])
           setInstructionalMaterialLink('')
         }
       } finally {
@@ -161,12 +250,43 @@ export default function UploadInstructionMaterialsModal({
     }
   }, [isOpen, transcriptId])
 
+  useEffect(() => {
+    if (!openSegmentPickerItemId) {
+      return
+    }
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!openSegmentPickerRef.current) {
+        return
+      }
+
+      if (!openSegmentPickerRef.current.contains(event.target as Node)) {
+        setOpenSegmentPickerItemId(null)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenSegmentPickerItemId(null)
+      }
+    }
+
+    window.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openSegmentPickerItemId])
+
   const handleAddItem = () => {
     const newItem: InstructionItem = {
       id: Date.now().toString(),
       image: null,
       imagePreview: null,
       text: '',
+      segmentIds: [],
     }
     setItems((previous) => [...previous, newItem])
   }
@@ -178,6 +298,7 @@ export default function UploadInstructionMaterialsModal({
       }
       return previous.filter((item) => item.id !== id)
     })
+    setOpenSegmentPickerItemId((current) => (current === id ? null : current))
   }
 
   const handleImageUpload = (id: string, file: File) => {
@@ -202,9 +323,40 @@ export default function UploadInstructionMaterialsModal({
     )
   }
 
+  const handleAddSegmentToItem = (itemId: string, segmentId: string) => {
+    setItems((previous) =>
+      previous.map((item) => {
+        if (item.id !== itemId || item.segmentIds.includes(segmentId)) {
+          return item
+        }
+
+        return {
+          ...item,
+          segmentIds: [...item.segmentIds, segmentId],
+        }
+      }),
+    )
+    setOpenSegmentPickerItemId(null)
+  }
+
+  const handleRemoveSegmentFromItem = (itemId: string, segmentId: string) => {
+    setItems((previous) =>
+      previous.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              segmentIds: item.segmentIds.filter((currentSegmentId) => currentSegmentId !== segmentId),
+            }
+          : item,
+      ),
+    )
+  }
+
   const resetForm = () => {
     setInstructionalMaterialLink('')
-    setItems([{ id: '1', image: null, imagePreview: null, text: '' }])
+    setItems([{ id: '1', image: null, imagePreview: null, text: '', segmentIds: [] }])
+    setTranscriptSegments([])
+    setOpenSegmentPickerItemId(null)
     setErrorMessage(null)
     setExistingItems([])
     setExistingError(null)
@@ -239,11 +391,22 @@ export default function UploadInstructionMaterialsModal({
           formData.append(fileField, item.image)
         }
 
+        const selectedSegmentLabels = item.segmentIds
+          .map((segmentId) =>
+            transcriptSegments.find((segment) => segment.id === segmentId)?.label ?? null,
+          )
+          .filter((label): label is string => Boolean(label))
+        const segmentBasedTitle =
+          selectedSegmentLabels.length > 0
+            ? selectedSegmentLabels.map((label) => `segment ${label}`).join(', ')
+            : ''
+
         return {
           fileField,
-          title: item.text.trim(),
+          title: segmentBasedTitle || item.text.trim(),
           description: item.text.trim(),
           orderIndex: index,
+          segmentIds: item.segmentIds,
         }
       })
 
@@ -318,8 +481,9 @@ export default function UploadInstructionMaterialsModal({
       setExistingItems([])
       setExistingError(null)
       setInstructionalMaterialLink('')
-      setItems([{ id: '1', image: null, imagePreview: null, text: '' }])
+      setItems([{ id: '1', image: null, imagePreview: null, text: '', segmentIds: [] }])
       setHasCheckedExisting(true)
+      setOpenSegmentPickerItemId(null)
     } catch (error) {
       console.error('Failed to delete instructional materials', error)
       setDeleteExistingError(
@@ -407,63 +571,89 @@ export default function UploadInstructionMaterialsModal({
                     </div>
 
                     <div className="space-y-4">
-                      {existingItems.map((item, index) => (
-                        <div
-                          key={item.id}
-                          className="bg-gray-50 rounded-lg p-6 border-2 border-gray-200 hover:border-primary-300 transition-colors"
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <h4 className="text-sm font-semibold text-gray-700">
-                                Item {index + 1}
-                              </h4>
-                              {item.fileName && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Uploaded file: {item.fileName}
-                                </p>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500">
-                              Position {item.orderIndex + 1}
-                              {item.uploadedAt
-                                ? ` · Uploaded ${new Date(item.uploadedAt).toLocaleString()}`
-                                : ''}
-                            </p>
-                          </div>
+                      {existingItems.map((item, index) => {
+                        const selectedSegments = item.segmentIds
+                          .map((segmentId) =>
+                            transcriptSegments.find((segment) => segment.id === segmentId) ?? null,
+                          )
+                          .filter((segment): segment is TranscriptSegmentItem => segment !== null)
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-2">
-                                Image
-                              </label>
-                              <div className="relative">
-                                <Image
-                                  src={item.imageUrl}
-                                  alt={item.imageTitle}
-                                  width={600}
-                                  height={400}
-                                  unoptimized
-                                  className="h-48 w-full rounded-lg border-2 border-gray-300 object-cover"
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-gray-50 rounded-lg p-6 border-2 border-gray-200 hover:border-primary-300 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-4">
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-700">
+                                  Item {index + 1}
+                                </h4>
+                                {item.fileName && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Uploaded file: {item.fileName}
+                                  </p>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                Position {item.orderIndex + 1}
+                                {item.uploadedAt
+                                  ? ` · Uploaded ${new Date(item.uploadedAt).toLocaleString()}`
+                                  : ''}
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  Image
+                                </label>
+                                <div className="relative">
+                                  <Image
+                                    src={item.imageUrl}
+                                    alt={item.imageTitle}
+                                    width={600}
+                                    height={400}
+                                    unoptimized
+                                    className="h-48 w-full rounded-lg border-2 border-gray-300 object-cover"
+                                  />
+                                  <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-gray-200" />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  Associated Text
+                                </label>
+                                <textarea
+                                  value={item.description ?? ''}
+                                  placeholder="Enter description or instructions for this image..."
+                                  readOnly
+                                  disabled
+                                  className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 resize-none cursor-not-allowed"
                                 />
-                                <div className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-gray-200" />
                               </div>
                             </div>
 
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-2">
-                                Associated Text
-                              </label>
-                              <textarea
-                                value={item.description ?? ''}
-                                placeholder="Enter description or instructions for this image..."
-                                readOnly
-                                disabled
-                                className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 resize-none cursor-not-allowed"
-                              />
-                            </div>
+                            {selectedSegments.length > 0 && (
+                              <div className="mt-4">
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  Associated Segments
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedSegments.map((segment) => (
+                                    <span
+                                      key={`${item.id}-${segment.id}`}
+                                      className="inline-flex items-center rounded-full bg-primary-100 px-2.5 py-1 text-xs font-medium text-primary-800"
+                                    >
+                                      {`segment ${segment.label}`}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     <button
@@ -499,100 +689,176 @@ export default function UploadInstructionMaterialsModal({
                     </label>
                     
                     <div className="space-y-4">
-                      {items.map((item, index) => (
-                        <div
-                          key={item.id}
-                          className="bg-gray-50 rounded-lg p-6 border-2 border-gray-200 hover:border-primary-300 transition-colors"
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <h4 className="text-sm font-semibold text-gray-700">
-                              Item {index + 1}
-                            </h4>
-                            {items.length > 1 && (
-                              <button
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="text-red-600 hover:text-red-700 transition-colors"
-                                title="Remove item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+                      {items.map((item, index) => {
+                        const selectedSegments = item.segmentIds
+                          .map((segmentId) =>
+                            transcriptSegments.find((segment) => segment.id === segmentId) ?? null,
+                          )
+                          .filter((segment): segment is TranscriptSegmentItem => segment !== null)
+                        const availableSegments = transcriptSegments.filter(
+                          (segment) => !item.segmentIds.includes(segment.id),
+                        )
+                        const isSegmentPickerOpen = openSegmentPickerItemId === item.id
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Image Upload */}
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-2">
-                                Image
-                              </label>
-                              {item.imagePreview ? (
-                                <div className="relative group">
-                                  <Image
-                                    src={item.imagePreview}
-                                    alt={`Preview ${index + 1}`}
-                                    width={600}
-                                    height={400}
-                                    unoptimized
-                                    className="h-48 w-full rounded-lg border-2 border-gray-300 object-cover"
-                                  />
-                                  <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                                    <label className="cursor-pointer bg-white px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
-                                      Change Image
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0]
-                                          if (file) handleImageUpload(item.id, file)
-                                        }}
-                                        className="hidden"
-                                      />
-                                    </label>
-                                  </div>
-                                </div>
-                              ) : (
-                                <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-colors">
-                                  <div className="flex flex-col items-center justify-center">
-                                    <ImageIcon className="w-10 h-10 text-gray-400 mb-2" />
-                                    <p className="text-sm text-gray-600 font-medium">
-                                      Upload Image
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      PNG, JPG, GIF up to 10MB
-                                    </p>
-                                  </div>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0]
-                                      if (file) handleImageUpload(item.id, file)
-                                    }}
-                                    className="hidden"
-                                  />
-                                </label>
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-gray-50 rounded-lg p-6 border-2 border-gray-200 hover:border-primary-300 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-4">
+                              <h4 className="text-sm font-semibold text-gray-700">
+                                Item {index + 1}
+                              </h4>
+                              {items.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(item.id)}
+                                  className="text-red-600 hover:text-red-700 transition-colors"
+                                  title="Remove item"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
                             </div>
 
-                            {/* Text Input */}
-                            <div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Image Upload */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  Image
+                                </label>
+                                {item.imagePreview ? (
+                                  <div className="relative group">
+                                    <Image
+                                      src={item.imagePreview}
+                                      alt={`Preview ${index + 1}`}
+                                      width={600}
+                                      height={400}
+                                      unoptimized
+                                      className="h-48 w-full rounded-lg border-2 border-gray-300 object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                      <label className="cursor-pointer bg-white px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
+                                        Change Image
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) handleImageUpload(item.id, file)
+                                          }}
+                                          className="hidden"
+                                        />
+                                      </label>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-colors">
+                                    <div className="flex flex-col items-center justify-center">
+                                      <ImageIcon className="w-10 h-10 text-gray-400 mb-2" />
+                                      <p className="text-sm text-gray-600 font-medium">
+                                        Upload Image
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        PNG, JPG, GIF up to 10MB
+                                      </p>
+                                    </div>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleImageUpload(item.id, file)
+                                      }}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                )}
+                              </div>
+
+                              {/* Text Input */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-2">
+                                  Associated Text
+                                </label>
+                                <textarea
+                                  value={item.text}
+                                  onChange={(e) => handleTextChange(item.id, e.target.value)}
+                                  placeholder="Enter description or instructions for this image..."
+                                  className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-4">
                               <label className="block text-xs font-medium text-gray-600 mb-2">
-                                Associated Text
+                                Associated Segments
                               </label>
-                              <textarea
-                                value={item.text}
-                                onChange={(e) => handleTextChange(item.id, e.target.value)}
-                                placeholder="Enter description or instructions for this image..."
-                                className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-                              />
+                              <div className="flex flex-wrap items-center gap-2">
+                                {selectedSegments.map((segment) => (
+                                  <button
+                                    key={`${item.id}-${segment.id}`}
+                                    type="button"
+                                    onClick={() => handleRemoveSegmentFromItem(item.id, segment.id)}
+                                    className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2.5 py-1 text-xs font-medium text-primary-800 hover:bg-primary-200 transition-colors"
+                                    title={`Remove segment ${segment.label}`}
+                                  >
+                                    <span>{`segment ${segment.label}`}</span>
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                ))}
+
+                                {selectedSegments.length === 0 && (
+                                  <span className="text-xs text-gray-500">No segments selected.</span>
+                                )}
+
+                                <div
+                                  className="relative"
+                                  ref={isSegmentPickerOpen ? openSegmentPickerRef : null}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOpenSegmentPickerItemId((current) =>
+                                        current === item.id ? null : item.id,
+                                      )
+                                    }
+                                    disabled={availableSegments.length === 0}
+                                    className="inline-flex items-center rounded-full border border-primary-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
+                                  >
+                                    + Add segment
+                                  </button>
+
+                                  {isSegmentPickerOpen && (
+                                    <div className="absolute left-0 top-full z-20 mt-2 w-64 max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                                      {availableSegments.map((segment) => (
+                                        <button
+                                          key={segment.id}
+                                          type="button"
+                                          onClick={() => handleAddSegmentToItem(item.id, segment.id)}
+                                          className="w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                                        >
+                                          {`segment ${segment.label}`}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {transcriptSegments.length === 0 && (
+                                <p className="mt-2 text-xs text-gray-500">
+                                  No transcript segments available.
+                                </p>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     {/* Add Item Button */}
                     <button
+                      type="button"
                       onClick={handleAddItem}
                       className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-primary-500 hover:text-primary-600 hover:bg-primary-50 transition-colors"
                     >

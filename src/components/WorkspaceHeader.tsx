@@ -31,6 +31,10 @@ type WorkspaceHeaderProps = {
   children?: ReactNode
   onMenuLinkClick?: (link: MenuLink) => void
   menuContent?: ReactNode
+  menuButtonTourId?: string
+  menuPanelTourId?: string
+  menuLinkTourIds?: Record<string, string>
+  forceMenuOpen?: boolean
   variant?: 'default' | 'minimal'
   density?: 'default' | 'compact'
   workspaceButtonVariant?: 'pill' | 'icon'
@@ -63,6 +67,10 @@ export function WorkspaceHeader({
   children,
   onMenuLinkClick,
   menuContent,
+  menuButtonTourId,
+  menuPanelTourId,
+  menuLinkTourIds,
+  forceMenuOpen = false,
   variant = 'default',
   density = 'default',
   workspaceButtonVariant = 'pill',
@@ -156,6 +164,11 @@ export function WorkspaceHeader({
     setMenuOpen(false)
     router.push('/admin')
   }
+
+  useEffect(() => {
+    if (!forceMenuOpen) return
+    setMenuOpen(true)
+  }, [forceMenuOpen])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -259,6 +272,7 @@ export function WorkspaceHeader({
             ref={menuTriggerRef}
             onClick={() => setMenuOpen((previous) => !previous)}
             className={menuButtonClassName}
+            data-tour-id={menuButtonTourId}
             aria-label="Open command menu"
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
@@ -270,6 +284,7 @@ export function WorkspaceHeader({
             <div
               ref={menuPanelRef}
               id="command-menu-panel"
+              data-tour-id={menuPanelTourId}
               className="stealth-scrollbar stealth-scrollbar--active absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 max-w-sm max-h-[70vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white/95 p-6 pr-5 text-left shadow-2xl shadow-slate-200/80"
             >
               {showCommandCenterHeaderRow && (
@@ -306,6 +321,7 @@ export function WorkspaceHeader({
                     key={link.id}
                     type="button"
                     onClick={() => handleMenuLinkClick(link)}
+                    data-tour-id={menuLinkTourIds?.[link.id]}
                     className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                       link.accent
                         ? 'border-indigo-200 bg-gradient-to-r from-indigo-100 to-sky-100 text-indigo-700 shadow-sm shadow-indigo-100/70'

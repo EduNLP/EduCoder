@@ -9,6 +9,7 @@ const SYSTEM_USERNAME = 'llm-system'
 type NotePayload = {
   noteId?: string
   transcriptId?: string
+  lineIds?: string[]
   title?: string
   studentEvidence?: string
   utteranceNote?: string
@@ -166,6 +167,12 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as NotePayload | null
     const transcriptId =
       typeof body?.transcriptId === 'string' ? body.transcriptId.trim() : ''
+    const lineIds = Array.isArray(body?.lineIds)
+      ? body.lineIds.filter((lineId): lineId is string => typeof lineId === 'string')
+      : []
+    const uniqueLineIds = Array.from(
+      new Set(lineIds.map((lineId) => lineId.trim()).filter(Boolean)),
+    )
     const title = typeof body?.title === 'string' ? body.title.trim() : ''
     const q1 =
       typeof body?.studentEvidence === 'string'
@@ -242,6 +249,23 @@ export async function POST(request: Request) {
       )
     }
 
+    if (uniqueLineIds.length > 0) {
+      const validLines = await prisma.transcriptLines.findMany({
+        where: {
+          line_id: { in: uniqueLineIds },
+          transcript_id: transcriptId,
+        },
+        select: { line_id: true },
+      })
+
+      if (validLines.length !== uniqueLineIds.length) {
+        return NextResponse.json(
+          { success: false, error: 'One or more transcript lines are invalid.' },
+          { status: 400 },
+        )
+      }
+    }
+
     const createdNote = await prisma.$transaction(async (tx) => {
       const maxNoteNumber = await tx.notes.aggregate({
         where: { transcript_id: transcriptId, user_id: annotator.id },
@@ -249,7 +273,7 @@ export async function POST(request: Request) {
       })
       const nextNoteNumber = (maxNoteNumber._max?.note_number ?? 0) + 1
 
-      return tx.notes.create({
+      const note = await tx.notes.create({
         data: {
           transcript_id: transcriptId,
           user_id: annotator.id,
@@ -269,6 +293,18 @@ export async function POST(request: Request) {
           q3: true,
         },
       })
+
+      if (uniqueLineIds.length > 0) {
+        await tx.noteAssignments.createMany({
+          data: uniqueLineIds.map((lineId) => ({
+            note_id: note.note_id,
+            line_id: lineId,
+          })),
+          skipDuplicates: true,
+        })
+      }
+
+      return note
     })
 
     return NextResponse.json({

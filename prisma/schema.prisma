@@ -128,6 +128,20 @@ model InstructionalMaterial {
   order_index   Int
   uploaded_at   DateTime      @default(now())
   transcript    Transcripts   @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
+  segmentLinks  InstructionalMaterialSegment[]
+}
+
+model InstructionalMaterialSegment {
+  material_id String @db.Uuid
+  segment_id  String @db.Uuid
+  createdAt   DateTime @default(now())
+
+  material InstructionalMaterial @relation(fields: [material_id], references: [id], onDelete: Cascade)
+  segment  TranscriptSegments    @relation(fields: [segment_id], references: [id], onDelete: Cascade)
+
+  @@id([material_id, segment_id])
+  @@index([segment_id])
+  @@map("InstructionalMaterialSegments")
 }
 
 model Annotations {
@@ -278,6 +292,7 @@ model TranscriptSegments {
   end_time      Decimal?    @db.Decimal(10, 2)
   transcript    Transcripts @relation(fields: [transcript_id], references: [id], onDelete: Cascade)
   lines         TranscriptLines[]
+  instructionalMaterialLinks InstructionalMaterialSegment[]
 
   @@map("TranscriptSegments")
 }
