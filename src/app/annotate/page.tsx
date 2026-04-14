@@ -671,6 +671,7 @@ function AnnotationPageContent() {
   const playbackRowRef = useRef<string | null>(null)
   const hasAutoSelectedLessonGoalsRowsRef = useRef(false)
   const isPreparingAssignExistingNoteStepRef = useRef(false)
+  const onboardingCreatedNoteIdRef = useRef<string | null>(null)
   const loadNotesRef = useRef<((transcriptId: string) => Promise<LoadedNotesResult>) | null>(null)
   const noteCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
@@ -1515,6 +1516,7 @@ function AnnotationPageContent() {
         const message = payload?.error ?? 'Unable to create onboarding note.'
         throw new Error(message)
       }
+      onboardingCreatedNoteIdRef.current = payload.note.id
 
       const loadNotesForOnboarding = loadNotesRef.current
       if (!loadNotesForOnboarding) {
@@ -1675,10 +1677,52 @@ function AnnotationPageContent() {
     })
   }, [openCommandMenuForOnboarding])
 
+  const deleteOnboardingCreatedNote = useCallback(async () => {
+    const onboardingNoteId = onboardingCreatedNoteIdRef.current
+    if (!onboardingNoteId) {
+      return
+    }
+
+    onboardingCreatedNoteIdRef.current = null
+
+    try {
+      const response = await fetch('/api/annotator/notes', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: onboardingNoteId }),
+      })
+      const payload: { success?: boolean; error?: string } | null = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok && response.status !== 404) {
+        const message = payload?.error ?? 'Unable to delete onboarding note.'
+        throw new Error(message)
+      }
+
+      const transcriptId = transcriptMeta?.id ?? ''
+      const loadNotesForOnboarding = loadNotesRef.current
+      if (!transcriptId || !loadNotesForOnboarding) {
+        return
+      }
+
+      const { notes, assignmentsByRow } = await loadNotesForOnboarding(transcriptId)
+      setRowAssignedNotes(
+        buildRowAssignments(transcriptRows, notes, assignmentsByRow),
+      )
+    } catch (error) {
+      console.error('Failed to delete onboarding note', error)
+      const message =
+        error instanceof Error ? error.message : 'Unable to delete onboarding note.'
+      setNotesError(message)
+    }
+  }, [transcriptMeta?.id, transcriptRows])
+
   const handleLessonGoalsOnboardingNext = useCallback(async () => {
     const lastStepIndex = LESSON_GOALS_ONBOARDING_STEPS.length - 1
     const currentStep = lessonGoalsOnboardingStepIndex
     if (currentStep >= lastStepIndex) {
+      await deleteOnboardingCreatedNote()
       dismissLessonGoalsOnboarding()
       return
     }
@@ -1707,6 +1751,7 @@ function AnnotationPageContent() {
   }, [
     assignOnboardingNoteToSelectedLine,
     clickMarkAsCompleteForOnboarding,
+    deleteOnboardingCreatedNote,
     dismissLessonGoalsOnboarding,
     lessonGoalsOnboardingStepIndex,
     openCommandMenuForOnboarding,
