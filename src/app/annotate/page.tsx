@@ -214,27 +214,21 @@ type SpeakerColor = {
   border: string
 }
 
-type OnboardingTourPlacement = 'top' | 'right' | 'bottom' | 'left'
+type LessonGoalsOverlayPosition = {
+  top: number
+  left: number
+  placement: 'left' | 'right' | 'bottom'
+}
 
-type OnboardingTourStep = {
-  id: string
-  target: string
+type LessonGoalsOnboardingStep = {
+  stepLabel: string
   title: string
   description: string
-  placement: OnboardingTourPlacement
 }
 
-type SpotlightRect = {
-  top: number
-  left: number
-  width: number
-  height: number
-}
-
-type TooltipPosition = {
-  top: number
-  left: number
-  placement: OnboardingTourPlacement
+type LoadedNotesResult = {
+  notes: NoteBadge[]
+  assignmentsByRow: Record<string, Record<string, boolean>>
 }
 
 const NOTE_BADGE_COLORS = [
@@ -325,186 +319,63 @@ const createEmptyNewNote = (): NewNoteDraft => ({
 })
 
 const EXIT_TICKET_PROMPT =
-  'Before submitting, what is one key instructional move you would take next based on this transcript?'
-
-const ONBOARDING_SPOTLIGHT_PADDING = 8
-const ONBOARDING_TOOLTIP_OFFSET = 16
-const ONBOARDING_TOOLTIP_WIDTH_ESTIMATE = 320
-const ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE = 224
-const ONBOARDING_VIEWPORT_PADDING = 12
-
-const ANNOTATION_ONBOARDING_TOUR_STEPS: OnboardingTourStep[] = [
+  'What is one key instructional move you would take next based on this transcript?'
+const LESSON_GOALS_ONBOARDING_STEPS: LessonGoalsOnboardingStep[] = [
   {
-    id: 'welcome',
-    target: 'annotate-header',
-    title: 'Welcome to EduCoder!',
-    description:
-      "Let's walk through how to annotate a lesson. This quick tour will show you everything you need to get started.",
-    placement: 'bottom',
-  },
-  {
-    id: 'lesson-goals',
-    target: 'instruction-panel',
+    stepLabel: '2 of 10',
     title: 'Review the Lesson Goals',
     description:
       'Start here to understand the knowledge, skills, and reasoning students are expected to develop in this lesson. This context will guide your annotations.',
-    placement: 'right',
   },
   {
-    id: 'student-materials',
-    target: 'student-materials',
+    stepLabel: '3 of 10',
     title: 'Explore the Student Materials',
     description:
-      'Work through the math task yourself using the activity sheets on the left. Doing the task first helps you better understand what students are experiencing.',
-    placement: 'right',
+      'Work through the math task yourself using the activity sheets on the left. Click any image to expand it for a closer look. Doing the task first helps you better understand what students are experiencing.',
   },
   {
-    id: 'lesson-video',
-    target: 'lesson-video',
+    stepLabel: '4 of 10',
     title: 'Watch the Lesson Video',
     description:
       'Press play to watch the classroom video. Follow along with the transcript below as it plays.',
-    placement: 'bottom',
   },
   {
-    id: 'transcript-lines',
-    target: 'transcript-lines',
+    stepLabel: '5 of 10',
     title: 'Select Lines of Interest',
     description:
-      "Notice a moment worth capturing? Check the box next to any transcript line(s) you'd like to annotate. You can select multiple lines at once.",
-    placement: 'top',
+      "Notice a moment worth capturing? Check the box next to any transcript line(s) you'd like to annotate. You can select multiple lines at once by clicking and dragging.",
   },
   {
-    id: 'create-note',
-    target: 'annotation-create-note',
+    stepLabel: '6 of 10',
     title: 'Create a Note',
     description:
-      'With your lines selected, click + Create a note to add your observation and tag it with the relevant category.',
-    placement: 'left',
+      'With your lines selected, click + Create a note to add your observation.',
   },
   {
-    id: 'existing-notes',
-    target: 'existing-notes',
-    title: 'Add Lines to an Existing Note',
+    stepLabel: '7 of 10',
+    title: 'Assign Lines to an Existing Note',
     description:
-      'Already have a note started? Just select your lines, then click any existing note in the right panel to attach them instantly.',
-    placement: 'left',
+      'Already have a note? Just select your lines, then click any existing note to attach them instantly.',
   },
   {
-    id: 'mark-complete',
-    target: 'command-menu-trigger',
-    title: 'Mark the Section as Complete',
+    stepLabel: '8 of 10',
+    title: 'Mark as Complete',
     description:
-      'Finished annotating? Open the menu (☰) in the top right and choose Mark as complete to wrap up this section.',
-    placement: 'left',
+      'After completing your annotations, open the menu and click "Mark as complete" to submit them.',
   },
   {
-    id: 'exit-ticket',
-    target: 'menu-mark-complete',
+    stepLabel: '9 of 10',
     title: 'Complete the Exit Ticket',
     description:
-      "You'll be prompted to answer a short exit ticket reflecting on what you observed. Take a moment to share your thoughts.",
-    placement: 'left',
+      'After clicking "Mark as Complete" You\'ll be prompted to answer a short exit ticket reflecting on what you observed. Take a moment to share your thoughts.',
   },
   {
-    id: 'scavenger-hunt',
-    target: 'command-menu-panel',
+    stepLabel: '10 of 10',
     title: 'Continue to the Scavenger Hunt',
     description:
-      "Once your exit ticket is submitted, select Scavenger Hunt to move on to the next activity. You're all set!",
-    placement: 'left',
+      "Once your exit ticket is submitted, the Scavenger Hunt option will appear in the menu. Select it to move on to the next activity. You're all set!",
   },
 ]
-
-const ONBOARDING_TOOLTIP_ARROW_CLASS: Record<
-  OnboardingTourPlacement,
-  string
-> = {
-  top: 'bottom-[-0.4rem] left-1/2 -translate-x-1/2 border-b border-r',
-  right: '-left-1.5 top-1/2 -translate-y-1/2 border-b border-l',
-  bottom: '-top-1.5 left-1/2 -translate-x-1/2 border-l border-t',
-  left: '-right-1.5 top-1/2 -translate-y-1/2 border-r border-t',
-}
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value))
-
-const calculateOnboardingTooltipPosition = (
-  rect: SpotlightRect,
-  preferredPlacement: OnboardingTourPlacement,
-): TooltipPosition => {
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-  const availableSpace: Record<OnboardingTourPlacement, number> = {
-    top: rect.top,
-    right: viewportWidth - (rect.left + rect.width),
-    bottom: viewportHeight - (rect.top + rect.height),
-    left: rect.left,
-  }
-
-  const placementCandidates: OnboardingTourPlacement[] = [
-    preferredPlacement,
-    ...(['right', 'bottom', 'left', 'top'] as OnboardingTourPlacement[]).filter(
-      (candidate) => candidate !== preferredPlacement,
-    ),
-  ]
-
-  const selectedPlacement =
-    placementCandidates.find((candidate) => {
-      if (candidate === 'top' || candidate === 'bottom') {
-        return (
-          availableSpace[candidate] >=
-          ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE + ONBOARDING_TOOLTIP_OFFSET
-        )
-      }
-
-      return (
-        availableSpace[candidate] >=
-        ONBOARDING_TOOLTIP_WIDTH_ESTIMATE + ONBOARDING_TOOLTIP_OFFSET
-      )
-    }) ?? preferredPlacement
-
-  let top = rect.top
-  let left = rect.left
-
-  if (selectedPlacement === 'top') {
-    top = rect.top - ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE - ONBOARDING_TOOLTIP_OFFSET
-    left = rect.left + rect.width / 2 - ONBOARDING_TOOLTIP_WIDTH_ESTIMATE / 2
-  } else if (selectedPlacement === 'bottom') {
-    top = rect.top + rect.height + ONBOARDING_TOOLTIP_OFFSET
-    left = rect.left + rect.width / 2 - ONBOARDING_TOOLTIP_WIDTH_ESTIMATE / 2
-  } else if (selectedPlacement === 'left') {
-    top = rect.top + rect.height / 2 - ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE / 2
-    left = rect.left - ONBOARDING_TOOLTIP_WIDTH_ESTIMATE - ONBOARDING_TOOLTIP_OFFSET
-  } else {
-    top = rect.top + rect.height / 2 - ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE / 2
-    left = rect.left + rect.width + ONBOARDING_TOOLTIP_OFFSET
-  }
-
-  return {
-    top: clamp(
-      top,
-      ONBOARDING_VIEWPORT_PADDING,
-      Math.max(
-        ONBOARDING_VIEWPORT_PADDING,
-        viewportHeight -
-          ONBOARDING_TOOLTIP_HEIGHT_ESTIMATE -
-          ONBOARDING_VIEWPORT_PADDING,
-      ),
-    ),
-    left: clamp(
-      left,
-      ONBOARDING_VIEWPORT_PADDING,
-      Math.max(
-        ONBOARDING_VIEWPORT_PADDING,
-        viewportWidth -
-          ONBOARDING_TOOLTIP_WIDTH_ESTIMATE -
-          ONBOARDING_VIEWPORT_PADDING,
-      ),
-    ),
-    placement: selectedPlacement,
-  }
-}
 
 const createEmptyNoteAssignments = (noteBadges: NoteBadge[]) =>
   noteBadges.reduce((acc, note) => {
@@ -740,12 +611,12 @@ function AnnotationPageContent() {
   const [activeAnnotationTab, setActiveAnnotationTab] = useState<
     'assign' | 'flag'
   >('assign')
-  const [showOnboardingTour, setShowOnboardingTour] = useState(true)
-  const [onboardingStepIndex, setOnboardingStepIndex] = useState(0)
-  const [onboardingSpotlightRect, setOnboardingSpotlightRect] =
-    useState<SpotlightRect | null>(null)
-  const [onboardingTooltipPosition, setOnboardingTooltipPosition] =
-    useState<TooltipPosition | null>(null)
+  const [isLessonGoalsOnboardingOpen, setIsLessonGoalsOnboardingOpen] =
+    useState(false)
+  const [lessonGoalsOnboardingStepIndex, setLessonGoalsOnboardingStepIndex] =
+    useState(0)
+  const [lessonGoalsOverlayPosition, setLessonGoalsOverlayPosition] =
+    useState<LessonGoalsOverlayPosition | null>(null)
   const [reviewingNoteId, setReviewingNoteId] = useState<string | null>(null)
   const [newNote, setNewNote] = useState<NewNoteDraft>(createEmptyNewNote())
   const [isCreatingNote, setIsCreatingNote] = useState(false)
@@ -789,11 +660,18 @@ function AnnotationPageContent() {
   const transcriptScrollbarTimeout = useRef<number | undefined>(undefined)
   const instructionScrollRef = useRef<HTMLDivElement | null>(null)
   const instructionScrollbarTimeout = useRef<number | undefined>(undefined)
+  const instructionPanelRef = useRef<HTMLElement | null>(null)
+  const firstInstructionMaterialRef = useRef<HTMLDivElement | null>(null)
   const annotationPanelRef = useRef<HTMLDivElement | null>(null)
+  const createNoteTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const firstExistingNoteRef = useRef<HTMLDivElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const activeVideoTranscriptRef = useRef<string | null>(null)
   const playbackRowRef = useRef<string | null>(null)
+  const hasAutoSelectedLessonGoalsRowsRef = useRef(false)
+  const isPreparingAssignExistingNoteStepRef = useRef(false)
+  const loadNotesRef = useRef<((transcriptId: string) => Promise<LoadedNotesResult>) | null>(null)
   const noteCheckboxRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const isAnnotationComplete = Boolean(transcriptMeta?.annotationCompleted)
   const llmAnnotationVisibilityAdmin =
@@ -833,38 +711,6 @@ function AnnotationPageContent() {
     startY: 0,
   })
   const skipClickRef = useRef<string | null>(null)
-  const onboardingStepCount = ANNOTATION_ONBOARDING_TOUR_STEPS.length
-  const onboardingStep =
-    ANNOTATION_ONBOARDING_TOUR_STEPS[onboardingStepIndex] ?? null
-  const isOnboardingTourVisible =
-    showOnboardingTour &&
-    Boolean(onboardingStep) &&
-    !activeInstructionImage &&
-    !showExitTicketModal &&
-    !deleteNoteId
-  const isLastOnboardingStep = onboardingStepIndex === onboardingStepCount - 1
-  const onboardingStepLabel = `${onboardingStepIndex + 1} of ${onboardingStepCount}`
-  const shouldForceCommandMenuOpen =
-    isOnboardingTourVisible &&
-    (onboardingStep?.target === 'menu-mark-complete' ||
-      onboardingStep?.target === 'command-menu-panel')
-
-  const closeOnboardingTour = useCallback(() => {
-    setShowOnboardingTour(false)
-    setOnboardingSpotlightRect(null)
-    setOnboardingTooltipPosition(null)
-  }, [])
-
-  const handleOnboardingNext = useCallback(() => {
-    if (isLastOnboardingStep) {
-      closeOnboardingTour()
-      return
-    }
-
-    setOnboardingStepIndex((previous) =>
-      Math.min(previous + 1, onboardingStepCount - 1),
-    )
-  }, [closeOnboardingTour, isLastOnboardingStep, onboardingStepCount])
 
   const selectRow = useCallback((rowId: string) => {
     setCheckedRows({ [rowId]: true })
@@ -951,145 +797,6 @@ function AnnotationPageContent() {
       window.removeEventListener('keydown', handleEscape)
     }
   }, [timelineSettingsOpen])
-
-  useEffect(() => {
-    if (!showOnboardingTour || !onboardingStep) return
-
-    if (onboardingStep.target === 'toolbar-search' && !toolbarVisible) {
-      setToolbarVisible(true)
-    }
-
-    if (
-      (onboardingStep.target === 'instruction-panel' ||
-        onboardingStep.target === 'student-materials') &&
-      instructionCollapsed
-    ) {
-      setInstructionCollapsed(false)
-    }
-
-    if (
-      (onboardingStep.target === 'annotation-panel' ||
-        onboardingStep.target === 'annotation-create-note' ||
-        onboardingStep.target === 'existing-notes') &&
-      annotationCollapsed
-    ) {
-      setAnnotationCollapsed(false)
-    }
-
-    if (
-      (onboardingStep.target === 'annotation-create-note' ||
-        onboardingStep.target === 'existing-notes') &&
-      activeAnnotationTab !== 'assign'
-    ) {
-      setActiveAnnotationTab('assign')
-    }
-  }, [
-    activeAnnotationTab,
-    annotationCollapsed,
-    instructionCollapsed,
-    onboardingStep,
-    showOnboardingTour,
-    toolbarVisible,
-  ])
-
-  const updateOnboardingSpotlight = useCallback(() => {
-    if (!isOnboardingTourVisible || !onboardingStep) {
-      setOnboardingSpotlightRect(null)
-      return
-    }
-
-    const targetElement = document.querySelector<HTMLElement>(
-      `[data-tour-id="${onboardingStep.target}"]`,
-    )
-    if (!targetElement) {
-      setOnboardingSpotlightRect(null)
-      return
-    }
-
-    const rect = targetElement.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) {
-      setOnboardingSpotlightRect(null)
-      return
-    }
-
-    const top = Math.max(
-      4,
-      Math.round(rect.top - ONBOARDING_SPOTLIGHT_PADDING),
-    )
-    const left = Math.max(
-      4,
-      Math.round(rect.left - ONBOARDING_SPOTLIGHT_PADDING),
-    )
-    const right = Math.min(
-      window.innerWidth - 4,
-      Math.round(rect.right + ONBOARDING_SPOTLIGHT_PADDING),
-    )
-    const bottom = Math.min(
-      window.innerHeight - 4,
-      Math.round(rect.bottom + ONBOARDING_SPOTLIGHT_PADDING),
-    )
-
-    setOnboardingSpotlightRect({
-      top,
-      left,
-      width: Math.max(24, right - left),
-      height: Math.max(24, bottom - top),
-    })
-  }, [isOnboardingTourVisible, onboardingStep])
-
-  useEffect(() => {
-    if (!isOnboardingTourVisible || !onboardingStep) {
-      setOnboardingSpotlightRect(null)
-      return
-    }
-
-    const scheduleSpotlightUpdate = () => {
-      window.requestAnimationFrame(() => {
-        updateOnboardingSpotlight()
-      })
-    }
-
-    scheduleSpotlightUpdate()
-    const spotlightInterval = window.setInterval(scheduleSpotlightUpdate, 200)
-    window.addEventListener('resize', scheduleSpotlightUpdate)
-    window.addEventListener('scroll', scheduleSpotlightUpdate, true)
-
-    return () => {
-      window.clearInterval(spotlightInterval)
-      window.removeEventListener('resize', scheduleSpotlightUpdate)
-      window.removeEventListener('scroll', scheduleSpotlightUpdate, true)
-    }
-  }, [isOnboardingTourVisible, onboardingStep, updateOnboardingSpotlight])
-
-  useEffect(() => {
-    if (!isOnboardingTourVisible || !onboardingStep || !onboardingSpotlightRect) {
-      setOnboardingTooltipPosition(null)
-      return
-    }
-
-    setOnboardingTooltipPosition(
-      calculateOnboardingTooltipPosition(
-        onboardingSpotlightRect,
-        onboardingStep.placement,
-      ),
-    )
-  }, [isOnboardingTourVisible, onboardingSpotlightRect, onboardingStep])
-
-  useEffect(() => {
-    if (!isOnboardingTourVisible) return
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        closeOnboardingTour()
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape)
-    return () => {
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [closeOnboardingTour, isOnboardingTourVisible])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1720,8 +1427,570 @@ function AnnotationPageContent() {
   )
 
   const requestedTranscriptId = searchParams?.get('transcript') ?? null
+  const lessonGoalsOnboardingRequested =
+    searchParams?.get('onboarding') === 'lesson-goals'
 
-  const loadNotes = useCallback(async (transcriptId: string) => {
+  useEffect(() => {
+    if (lessonGoalsOnboardingRequested) {
+      setIsLessonGoalsOnboardingOpen(true)
+      setLessonGoalsOnboardingStepIndex(0)
+    }
+  }, [lessonGoalsOnboardingRequested])
+
+  const dismissLessonGoalsOnboarding = useCallback(() => {
+    setIsLessonGoalsOnboardingOpen(false)
+    setLessonGoalsOnboardingStepIndex(0)
+
+    if (!searchParams?.has('onboarding')) {
+      return
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.delete('onboarding')
+    const nextQuery = nextParams.toString()
+    const nextPath = nextQuery ? `/annotate?${nextQuery}` : '/annotate'
+    router.replace(nextPath, { scroll: false })
+  }, [router, searchParams])
+
+  const prepareAssignExistingNoteStep = useCallback(async () => {
+    if (isPreparingAssignExistingNoteStepRef.current) {
+      return
+    }
+    isPreparingAssignExistingNoteStepRef.current = true
+
+    try {
+      const fourthRow =
+        filteredRows.find((row) => Number.parseInt(row.line, 10) === 4) ??
+        filteredRows[3] ??
+        null
+      if (fourthRow) {
+        setCheckedRows({ [fourthRow.id]: true })
+        setSelectedRow(fourthRow.id)
+      } else {
+        setCheckedRows({})
+        setSelectedRow(null)
+      }
+
+      if (annotationCollapsed) {
+        setAnnotationCollapsed(false)
+      }
+      if (activeAnnotationTab !== 'assign') {
+        setActiveAnnotationTab('assign')
+      }
+      if (reviewingNoteId) {
+        setReviewingNoteId(null)
+      }
+      setShowCreateNoteForm(false)
+      setNewNote(createEmptyNewNote())
+      setCreateNoteError(null)
+
+      const transcriptId = transcriptMeta?.id ?? ''
+      if (!transcriptId) {
+        return
+      }
+
+      const hasNoteOne = noteBadges.some(
+        (note) => note.label.trim().toLowerCase() === 'note 1',
+      )
+      if (hasNoteOne) {
+        return
+      }
+
+      const response = await fetch('/api/annotator/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcriptId,
+          lineIds: [],
+          title: 'note 1',
+          studentEvidence: '',
+          utteranceNote: '',
+        }),
+      })
+      const payload: NoteCreateResponse | null = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok || !payload?.success || !payload.note) {
+        const message = payload?.error ?? 'Unable to create onboarding note.'
+        throw new Error(message)
+      }
+
+      const loadNotesForOnboarding = loadNotesRef.current
+      if (!loadNotesForOnboarding) {
+        return
+      }
+
+      const { notes, assignmentsByRow } = await loadNotesForOnboarding(
+        transcriptId,
+      )
+      setRowAssignedNotes(
+        buildRowAssignments(transcriptRows, notes, assignmentsByRow),
+      )
+    } catch (error) {
+      console.error('Failed to prepare assign-existing-note onboarding step', error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to prepare existing note onboarding step.'
+      setNotesError(message)
+    } finally {
+      isPreparingAssignExistingNoteStepRef.current = false
+    }
+  }, [
+    activeAnnotationTab,
+    annotationCollapsed,
+    filteredRows,
+    noteBadges,
+    reviewingNoteId,
+    transcriptMeta?.id,
+    transcriptRows,
+  ])
+
+  const assignOnboardingNoteToSelectedLine = useCallback(async () => {
+    const transcriptId = transcriptMeta?.id ?? ''
+    if (!transcriptId) {
+      return
+    }
+
+    const selectedLineId =
+      Object.entries(checkedRows).find(([, isChecked]) => isChecked)?.[0] ??
+      selectedRow ??
+      filteredRows.find((row) => Number.parseInt(row.line, 10) === 4)?.id ??
+      filteredRows[3]?.id ??
+      null
+    if (!selectedLineId) {
+      return
+    }
+
+    const normalizedNoteTitle = 'note 1'
+    let noteId =
+      noteBadges.find(
+        (note) => note.label.trim().toLowerCase() === normalizedNoteTitle,
+      )?.id ?? null
+
+    const loadNotesForOnboarding = loadNotesRef.current
+    if (!noteId && loadNotesForOnboarding) {
+      const { notes } = await loadNotesForOnboarding(transcriptId)
+      noteId =
+        notes.find(
+          (note) => note.label.trim().toLowerCase() === normalizedNoteTitle,
+        )?.id ?? null
+    }
+    if (!noteId) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/annotator/note-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          noteId,
+          lineIds: [selectedLineId],
+          assigned: true,
+        }),
+      })
+      const payload: { success?: boolean; error?: string } | null = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.error ?? 'Unable to assign note to selected line.'
+        throw new Error(message)
+      }
+
+      if (!loadNotesForOnboarding) {
+        return
+      }
+      const { notes, assignmentsByRow } = await loadNotesForOnboarding(transcriptId)
+      setRowAssignedNotes(
+        buildRowAssignments(transcriptRows, notes, assignmentsByRow),
+      )
+    } catch (error) {
+      console.error('Failed to assign onboarding note to selected line', error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to assign note to selected line.'
+      setNotesError(message)
+    }
+  }, [
+    checkedRows,
+    filteredRows,
+    noteBadges,
+    selectedRow,
+    transcriptMeta?.id,
+    transcriptRows,
+  ])
+
+  const openCommandMenuForOnboarding = useCallback(async () => {
+    const menuTrigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-controls="command-menu-panel"]',
+    )
+    if (!menuTrigger) {
+      return
+    }
+
+    const isExpanded = menuTrigger.getAttribute('aria-expanded') === 'true'
+    if (!isExpanded) {
+      menuTrigger.click()
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve())
+        })
+      })
+    }
+  }, [])
+
+  const clickMarkAsCompleteForOnboarding = useCallback(async () => {
+    await openCommandMenuForOnboarding()
+
+    const markAsCompleteButton = document.querySelector<HTMLButtonElement>(
+      '#command-menu-panel button[data-menu-link-id="complete"]',
+    )
+    if (!markAsCompleteButton) {
+      return
+    }
+
+    markAsCompleteButton.click()
+
+    await new Promise<void>((resolve) => {
+      let frameCount = 0
+      const maxFrames = 24
+
+      const checkForDialog = () => {
+        const hasDialog = Boolean(
+          document.querySelector('#onboarding-exit-ticket-dialog'),
+        )
+        if (hasDialog || frameCount >= maxFrames) {
+          resolve()
+          return
+        }
+        frameCount += 1
+        window.requestAnimationFrame(checkForDialog)
+      }
+
+      checkForDialog()
+    })
+  }, [openCommandMenuForOnboarding])
+
+  const handleLessonGoalsOnboardingNext = useCallback(async () => {
+    const lastStepIndex = LESSON_GOALS_ONBOARDING_STEPS.length - 1
+    const currentStep = lessonGoalsOnboardingStepIndex
+    if (currentStep >= lastStepIndex) {
+      dismissLessonGoalsOnboarding()
+      return
+    }
+
+    if (currentStep === 4) {
+      await prepareAssignExistingNoteStep()
+    } else if (currentStep === 5) {
+      await assignOnboardingNoteToSelectedLine()
+      await openCommandMenuForOnboarding()
+    } else if (currentStep === 6) {
+      await clickMarkAsCompleteForOnboarding()
+    } else if (currentStep === 7) {
+      setShowExitTicketModal(false)
+      setExitTicketError(null)
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve())
+        })
+      })
+      await openCommandMenuForOnboarding()
+    }
+
+    setLessonGoalsOnboardingStepIndex((previousStep) =>
+      previousStep >= lastStepIndex ? previousStep : previousStep + 1,
+    )
+  }, [
+    assignOnboardingNoteToSelectedLine,
+    clickMarkAsCompleteForOnboarding,
+    dismissLessonGoalsOnboarding,
+    lessonGoalsOnboardingStepIndex,
+    openCommandMenuForOnboarding,
+    prepareAssignExistingNoteStep,
+  ])
+
+  useEffect(() => {
+    if (!isLessonGoalsOnboardingOpen) {
+      hasAutoSelectedLessonGoalsRowsRef.current = false
+      return
+    }
+
+    const isSelectLinesStep = lessonGoalsOnboardingStepIndex === 3
+    if (
+      !isSelectLinesStep ||
+      hasAutoSelectedLessonGoalsRowsRef.current ||
+      reviewingNoteId
+    ) {
+      return
+    }
+
+    const topRowIds = filteredRows.slice(0, 3).map((row) => row.id)
+    if (topRowIds.length === 0) {
+      return
+    }
+
+    setCheckedRows(
+      topRowIds.reduce((acc, rowId) => {
+        acc[rowId] = true
+        return acc
+      }, {} as Record<string, boolean>),
+    )
+    setSelectedRow(null)
+    hasAutoSelectedLessonGoalsRowsRef.current = true
+  }, [
+    filteredRows,
+    isLessonGoalsOnboardingOpen,
+    lessonGoalsOnboardingStepIndex,
+    reviewingNoteId,
+  ])
+
+  useEffect(() => {
+    if (!isLessonGoalsOnboardingOpen) return
+    if (
+      lessonGoalsOnboardingStepIndex !== 4 &&
+      lessonGoalsOnboardingStepIndex !== 5
+    ) {
+      return
+    }
+
+    if (annotationCollapsed) {
+      setAnnotationCollapsed(false)
+    }
+    if (activeAnnotationTab !== 'assign') {
+      setActiveAnnotationTab('assign')
+    }
+  }, [
+    activeAnnotationTab,
+    annotationCollapsed,
+    isLessonGoalsOnboardingOpen,
+    lessonGoalsOnboardingStepIndex,
+  ])
+
+  useEffect(() => {
+    if (!isLessonGoalsOnboardingOpen || instructionCollapsed) {
+      setLessonGoalsOverlayPosition(null)
+      return
+    }
+
+    const updateOverlayPosition = () => {
+      const panelElement = instructionPanelRef.current
+      if (!panelElement) {
+        setLessonGoalsOverlayPosition(null)
+        return
+      }
+
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+      const panelRect = panelElement.getBoundingClientRect()
+      const cardWidth = 340
+      const cardHeight = 220
+      const gutter = 18
+      const viewportPadding = 16
+      const isStudentMaterialsStep = lessonGoalsOnboardingStepIndex === 1
+      const isLessonVideoStep = lessonGoalsOnboardingStepIndex === 2
+      const isSelectLinesStep = lessonGoalsOnboardingStepIndex === 3
+      const isCreateNoteStep = lessonGoalsOnboardingStepIndex === 4
+      const isAssignExistingNoteStep = lessonGoalsOnboardingStepIndex === 5
+      const isMarkAsCompleteStep = lessonGoalsOnboardingStepIndex === 6
+      const isExitTicketStep = lessonGoalsOnboardingStepIndex === 7
+      const isScavengerHuntStep = lessonGoalsOnboardingStepIndex === 8
+      const firstInstructionMaterialRect =
+        firstInstructionMaterialRef.current?.getBoundingClientRect() ?? null
+      const annotationPanelRect =
+        annotationPanelRef.current?.getBoundingClientRect() ?? null
+      const lessonVideoRect =
+        videoContainerRef.current?.getBoundingClientRect() ?? null
+      const transcriptLinesRect =
+        transcriptScrollRef.current?.getBoundingClientRect() ?? null
+      const createNoteTriggerRect =
+        createNoteTriggerRef.current?.getBoundingClientRect() ?? null
+      const existingNoteRect =
+        firstExistingNoteRef.current?.getBoundingClientRect() ?? null
+      const commandMenuTriggerRect =
+        document
+          .querySelector<HTMLButtonElement>(
+            'button[aria-controls="command-menu-panel"]',
+          )
+          ?.getBoundingClientRect() ?? null
+      const markAsCompleteMenuButtonRect =
+        document
+          .querySelector<HTMLButtonElement>(
+            '#command-menu-panel button[data-menu-link-id="complete"]',
+          )
+          ?.getBoundingClientRect() ?? null
+      const scavengerHuntMenuButtonRect =
+        document
+          .querySelector<HTMLButtonElement>(
+            '#command-menu-panel button[data-menu-link-id="scavenger-hunt"]',
+          )
+          ?.getBoundingClientRect() ?? null
+      const commandMenuPanelRect =
+        document
+          .querySelector<HTMLDivElement>('#command-menu-panel')
+          ?.getBoundingClientRect() ?? null
+      const exitTicketDialogRect =
+        document
+          .querySelector<HTMLDivElement>('#onboarding-exit-ticket-dialog')
+          ?.getBoundingClientRect() ?? null
+      const firstTranscriptLineCheckboxRect =
+        transcriptScrollRef.current
+          ?.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')
+          ?.getBoundingClientRect() ?? null
+
+      let overlayAnchorRect = panelRect
+      if (isStudentMaterialsStep && firstInstructionMaterialRect) {
+        overlayAnchorRect = firstInstructionMaterialRect
+      } else if (isLessonVideoStep && lessonVideoRect) {
+        overlayAnchorRect = lessonVideoRect
+      } else if (isSelectLinesStep && transcriptLinesRect) {
+        overlayAnchorRect = transcriptLinesRect
+      } else if (isCreateNoteStep && (createNoteTriggerRect || annotationPanelRect)) {
+        overlayAnchorRect = createNoteTriggerRect ?? annotationPanelRect ?? panelRect
+      } else if (
+        isAssignExistingNoteStep &&
+        (existingNoteRect || annotationPanelRect)
+      ) {
+        overlayAnchorRect = existingNoteRect ?? annotationPanelRect ?? panelRect
+      } else if (
+        isMarkAsCompleteStep &&
+        (markAsCompleteMenuButtonRect || commandMenuTriggerRect)
+      ) {
+        overlayAnchorRect =
+          markAsCompleteMenuButtonRect ?? commandMenuTriggerRect ?? panelRect
+      } else if (isExitTicketStep && exitTicketDialogRect) {
+        overlayAnchorRect = exitTicketDialogRect
+      } else if (
+        isScavengerHuntStep &&
+        (scavengerHuntMenuButtonRect ||
+          markAsCompleteMenuButtonRect ||
+          commandMenuPanelRect ||
+          commandMenuTriggerRect)
+      ) {
+        overlayAnchorRect =
+          scavengerHuntMenuButtonRect ??
+          markAsCompleteMenuButtonRect ??
+          commandMenuPanelRect ??
+          commandMenuTriggerRect ??
+          panelRect
+      }
+
+      if (viewportWidth < 1024) {
+        setLessonGoalsOverlayPosition({
+          top: Math.max(viewportPadding, viewportHeight - cardHeight - 20),
+          left: viewportPadding,
+          placement: 'bottom',
+        })
+        return
+      }
+
+      const rightSideLeft = overlayAnchorRect.right + gutter
+      const rightFits = rightSideLeft + cardWidth <= viewportWidth - viewportPadding
+      const leftSideLeft = overlayAnchorRect.left - cardWidth - gutter
+      const leftFits = leftSideLeft >= viewportPadding
+
+      let placement: LessonGoalsOverlayPosition['placement'] = 'right'
+      let left = rightSideLeft
+
+      if (!rightFits && leftFits) {
+        placement = 'left'
+        left = leftSideLeft
+      } else if (!rightFits) {
+        left = Math.max(
+          viewportPadding,
+          Math.min(rightSideLeft, viewportWidth - cardWidth - viewportPadding),
+        )
+      }
+
+      if (isCreateNoteStep && placement === 'left') {
+        // Keep the create-note helper card visually closer to the trigger button.
+        left = Math.min(
+          viewportWidth - cardWidth - viewportPadding,
+          left + 120,
+        )
+      } else if (isAssignExistingNoteStep && placement === 'left') {
+        left = Math.min(
+          viewportWidth - cardWidth - viewportPadding,
+          left + 120,
+        )
+      } else if (isMarkAsCompleteStep && placement === 'left') {
+        left = Math.min(
+          viewportWidth - cardWidth - viewportPadding,
+          left + 120,
+        )
+      } else if (isExitTicketStep && placement === 'left') {
+        left = Math.min(
+          viewportWidth - cardWidth - viewportPadding,
+          left + 120,
+        )
+      } else if (isScavengerHuntStep && placement === 'left') {
+        left = Math.max(
+          viewportPadding,
+          Math.min(
+            viewportWidth - cardWidth - viewportPadding,
+            left + 117,
+          ),
+        )
+      }
+
+      if (isStudentMaterialsStep) {
+        left = Math.max(
+          viewportPadding,
+          Math.min(
+            viewportWidth - cardWidth - viewportPadding,
+            left + 35,
+          ),
+        )
+      }
+
+      const top = Math.max(
+        viewportPadding,
+        Math.min(
+          isLessonVideoStep
+            ? overlayAnchorRect.top + 24
+            : isSelectLinesStep
+              ? (firstTranscriptLineCheckboxRect?.top ?? overlayAnchorRect.top + 44) + 12
+            : isCreateNoteStep
+              ? (createNoteTriggerRect?.top ?? overlayAnchorRect.top + 20) + 2
+            : isAssignExistingNoteStep
+              ? (existingNoteRect?.top ?? overlayAnchorRect.top + 20) + 4
+            : isMarkAsCompleteStep
+              ? (markAsCompleteMenuButtonRect?.top ?? overlayAnchorRect.top + 8) - 4
+            : isExitTicketStep
+              ? (exitTicketDialogRect?.top ?? overlayAnchorRect.top + 16) + 8
+            : isScavengerHuntStep
+              ? (scavengerHuntMenuButtonRect?.top ?? overlayAnchorRect.top + 8) - 8
+            : isStudentMaterialsStep
+              ? overlayAnchorRect.top + 16
+              : panelRect.top + 40,
+          viewportHeight - cardHeight - viewportPadding,
+        ),
+      )
+
+      setLessonGoalsOverlayPosition({ top, left, placement })
+    }
+
+    updateOverlayPosition()
+    window.addEventListener('resize', updateOverlayPosition)
+    window.addEventListener('scroll', updateOverlayPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updateOverlayPosition)
+      window.removeEventListener('scroll', updateOverlayPosition, true)
+    }
+  }, [
+    instructionCards.length,
+    instructionCollapsed,
+    isLessonGoalsOnboardingOpen,
+    lessonGoalsOnboardingStepIndex,
+    noteBadges.length,
+    showScavengerHuntMenu,
+  ])
+
+  const loadNotes = useCallback(async (transcriptId: string): Promise<LoadedNotesResult> => {
     setNotesError(null)
 
     try {
@@ -1764,6 +2033,7 @@ function AnnotationPageContent() {
       return { notes: [], assignmentsByRow: {} }
     }
   }, [])
+  loadNotesRef.current = loadNotes
 
   const loadInstructionalMaterials = useCallback(async (transcriptId: string) => {
     setIsLoadingInstructionCards(true)
@@ -3167,6 +3437,10 @@ function AnnotationPageContent() {
     ? noteBadges.find((entry) => entry.id === deleteNoteId) ?? null
     : null
   const deleteNoteLabel = deleteNote?.label ?? 'this note'
+  const lessonGoalsOnboardingStep =
+    LESSON_GOALS_ONBOARDING_STEPS[lessonGoalsOnboardingStepIndex] ?? null
+  const isLastLessonGoalsOnboardingStep =
+    lessonGoalsOnboardingStepIndex >= LESSON_GOALS_ONBOARDING_STEPS.length - 1
 
   return (
     <div
@@ -3174,34 +3448,25 @@ function AnnotationPageContent() {
       style={pageBackgroundStyle}
     >
       <div className="mx-auto flex w-full max-w-none flex-1 flex-col gap-2 lg:min-h-0 lg:overflow-hidden">
-        <div data-tour-id="annotate-header">
-          <WorkspaceHeader
-            toolbarVisible={toolbarVisible}
-            onToggleToolbar={handleToggleToolbar}
-            onWorkspaceClick={handleBackToWorkspace}
-            showWorkspaceButton
-            showToolbarToggleButton={false}
-            showCommandCenterCloseButton={false}
-            showCommandCenterHeading={false}
-            menuLinks={annotationMenuLinks}
-            onMenuLinkClick={handleMenuLinkAction}
-            menuButtonTourId="command-menu-trigger"
-            menuPanelTourId="command-menu-panel"
-            menuLinkTourIds={{
-              complete: 'menu-mark-complete',
-              'scavenger-hunt': 'menu-scavenger-hunt',
-            }}
-            forceMenuOpen={shouldForceCommandMenuOpen}
-            variant="minimal"
-            density="compact"
-            workspaceButtonVariant="icon"
-          />
-        </div>
+        <WorkspaceHeader
+          toolbarVisible={toolbarVisible}
+          onToggleToolbar={handleToggleToolbar}
+          onWorkspaceClick={handleBackToWorkspace}
+          showWorkspaceButton
+          showToolbarToggleButton={false}
+          showCommandCenterCloseButton={false}
+          showCommandCenterHeading={false}
+          menuLinks={annotationMenuLinks}
+          onMenuLinkClick={handleMenuLinkAction}
+          variant="minimal"
+          density="compact"
+          workspaceButtonVariant="icon"
+        />
 
         {toolbarVisible && (
           <section className="relative z-40 flex-shrink-0 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm shadow-slate-200/70 backdrop-blur-xl">
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative flex-1" data-tour-id="toolbar-search">
+              <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="search"
@@ -3312,7 +3577,7 @@ function AnnotationPageContent() {
             className={`flex min-h-0 flex-col rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-sm shadow-slate-200/70 backdrop-blur-2xl transition-all duration-500 ${
               instructionCollapsed ? 'lg:w-16' : 'lg:w-80'
             }`}
-            data-tour-id="instruction-panel"
+            ref={instructionPanelRef}
           >
             <div className="flex items-center justify-between">
               <div className="flex flex-1 items-center">
@@ -3364,55 +3629,54 @@ function AnnotationPageContent() {
                         : 'Lesson learning goals haven\'t been added yet. Please ask an admin to provide them.'}
                     </p>
                   </div>
-                  <div className="space-y-3" data-tour-id="student-materials">
-                    {isLoadingInstructionCards ? (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
-                        Loading instructional materials…
-                      </div>
-                    ) : instructionCards.length > 0 ? (
-                      instructionCards.map((card) => {
-                        const description = card.description?.trim() ?? ''
-                        const hasDescription = Boolean(description)
-                        const fallbackLabel = 'Instructional material image'
-                        return (
-                          <div
-                            key={card.id}
-                            className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-200/70"
+                  {isLoadingInstructionCards ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
+                      Loading instructional materials…
+                    </div>
+                  ) : instructionCards.length > 0 ? (
+                    instructionCards.map((card, index) => {
+                      const description = card.description?.trim() ?? ''
+                      const hasDescription = Boolean(description)
+                      const fallbackLabel = 'Instructional material image'
+                      return (
+                        <div
+                          key={card.id}
+                          ref={index === 0 ? firstInstructionMaterialRef : undefined}
+                          className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm shadow-slate-200/70"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleInstructionImageClick(card)}
+                            className="group relative block w-full overflow-hidden rounded-2xl bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                            aria-label="View instructional material image"
                           >
-                            <button
-                              type="button"
-                              onClick={() => handleInstructionImageClick(card)}
-                              className="group relative block w-full overflow-hidden rounded-2xl bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-                              aria-label="View instructional material image"
-                            >
-                              <Image
-                                src={card.imageUrl}
-                                alt={hasDescription ? description : fallbackLabel}
-                                width={320}
-                                height={144}
-                                className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                sizes="(min-width: 1024px) 320px, 100vw"
-                              />
-                              <span className="sr-only">
-                                Expand instructional material
-                              </span>
-                            </button>
-                            {hasDescription && (
-                              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                                {description}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })
-                    ) : (
-                      instructionCardsError && (
-                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
-                          {instructionCardsError}
+                            <Image
+                              src={card.imageUrl}
+                              alt={hasDescription ? description : fallbackLabel}
+                              width={320}
+                              height={144}
+                              className="h-36 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              sizes="(min-width: 1024px) 320px, 100vw"
+                            />
+                            <span className="sr-only">
+                              Expand instructional material
+                            </span>
+                          </button>
+                          {hasDescription && (
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                              {description}
+                            </p>
+                          )}
                         </div>
                       )
-                    )}
-                  </div>
+                    })
+                  ) : (
+                    instructionCardsError && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm text-slate-500">
+                        {instructionCardsError}
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             ) : (
@@ -3497,7 +3761,6 @@ function AnnotationPageContent() {
                   )}
                   <div
                     ref={videoContainerRef}
-                    data-tour-id="lesson-video"
                     className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white"
                     onMouseEnter={() => {
                       if (!hasPlayedOnce) return
@@ -3791,7 +4054,6 @@ function AnnotationPageContent() {
                 className={`stealth-scrollbar stealth-scrollbar--overlay relative flex-1 min-w-0 overflow-auto rounded-2xl border border-slate-100 bg-white/70 p-2 pr-0.5 ${
                   showTranscriptScrollbar ? 'stealth-scrollbar--active' : ''
                 } ${isDragSelecting ? 'select-none' : ''}`}
-                data-tour-id="transcript-lines"
               >
                 {isLoadingTranscript ? (
                   <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-slate-500">
@@ -4092,7 +4354,6 @@ function AnnotationPageContent() {
               annotationCollapsed ? 'lg:w-16' : 'lg:w-96'
             }`}
             ref={annotationPanelRef}
-            data-tour-id="annotation-panel"
           >
             {annotationCollapsed ? (
               <button
@@ -4178,8 +4439,8 @@ function AnnotationPageContent() {
                   <div className="flex h-full flex-col gap-4 overflow-hidden">
                     <div className="flex-1 overflow-hidden">
                       <div className="stealth-scrollbar h-full space-y-5 overflow-y-auto pr-1">
-                        {activeAnnotationTab === 'assign' && (
-                          <div className="space-y-5">
+                          {activeAnnotationTab === 'assign' && (
+                            <div className="space-y-5">
                               <div className="space-y-3">
                                 {shouldShowLlmAnnotations && (
                                   <p className="text-[11px] uppercase tracking-widest text-slate-400">
@@ -4189,12 +4450,12 @@ function AnnotationPageContent() {
                                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 overflow-hidden">
                                   <button
                                     type="button"
+                                    ref={createNoteTriggerRef}
                                     onClick={() =>
                                       setShowCreateNoteForm((previous) => !previous)
                                     }
                                     aria-expanded={showCreateNoteForm}
                                     aria-controls="create-note-template"
-                                    data-tour-id="annotation-create-note"
                                     className={`flex w-full items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-slate-600 transition hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 ${
                                       showCreateNoteForm
                                         ? 'border-b border-slate-200 bg-white/80'
@@ -4294,196 +4555,199 @@ function AnnotationPageContent() {
                                   )}
                                 </div>
                               </div>
-                              <div className="space-y-3" data-tour-id="existing-notes">
-                                {notesError && (
-                                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                    {notesError}
-                                  </div>
-                                )}
-                                {!notesError && noteBadges.length === 0 && (
-                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                                    No notes yet. Create one to start assigning.
-                                  </div>
-                                )}
-                                {noteBadges.map((note) => {
-                                  const noteState =
-                                    noteSelectionState[note.id] ?? {
-                                      checked: false,
-                                      indeterminate: false,
+                              {notesError && (
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                  {notesError}
+                                </div>
+                              )}
+                              {!notesError && noteBadges.length === 0 && (
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                  No notes yet. Create one to start assigning.
+                                </div>
+                              )}
+                              {noteBadges.map((note, noteIndex) => {
+                                const noteState =
+                                  noteSelectionState[note.id] ?? {
+                                    checked: false,
+                                    indeterminate: false,
+                                  }
+                                const isNoteActive = noteState.checked
+                                const isReviewingThisNote = reviewingNoteId === note.id
+                                const isExpanded = expandedNotes[note.id] ?? false
+                                const isEditing = editableNotes[note.id] ?? false
+                                const noteDetailsValues =
+                                  noteDetailsDrafts[note.id] ??
+                                  createNoteContentFields()
+                                const noteTitleValue = noteTitleDrafts[note.id] ?? ''
+                                const noteCardToneClass = isReviewingThisNote
+                                  ? 'border-indigo-300 bg-indigo-50/70 text-indigo-700 shadow-sm shadow-indigo-100'
+                                  : isNoteActive
+                                    ? 'border-slate-300 bg-white text-slate-900 shadow-sm shadow-slate-200/80'
+                                    : 'border-slate-200 bg-slate-50 text-slate-700'
+                                return (
+                                  <div
+                                    key={note.id}
+                                    ref={
+                                      noteIndex === 0
+                                        ? firstExistingNoteRef
+                                        : undefined
                                     }
-                                  const isNoteActive = noteState.checked
-                                  const isReviewingThisNote = reviewingNoteId === note.id
-                                  const isExpanded = expandedNotes[note.id] ?? false
-                                  const isEditing = editableNotes[note.id] ?? false
-                                  const noteDetailsValues =
-                                    noteDetailsDrafts[note.id] ??
-                                    createNoteContentFields()
-                                  const noteTitleValue = noteTitleDrafts[note.id] ?? ''
-                                  const noteCardToneClass = isReviewingThisNote
-                                    ? 'border-indigo-300 bg-indigo-50/70 text-indigo-700 shadow-sm shadow-indigo-100'
-                                    : isNoteActive
-                                      ? 'border-slate-300 bg-white text-slate-900 shadow-sm shadow-slate-200/80'
-                                      : 'border-slate-200 bg-slate-50 text-slate-700'
-                                  return (
-                                    <div
-                                      key={note.id}
-                                      className={`rounded-2xl border transition ${noteCardToneClass}`}
-                                      onDoubleClick={(event) => {
-                                        const target = event.target as HTMLElement | null
-                                        if (target?.closest('button, input, textarea')) {
-                                          return
+                                    className={`rounded-2xl border transition ${noteCardToneClass}`}
+                                    onDoubleClick={(event) => {
+                                      const target = event.target as HTMLElement | null
+                                      if (target?.closest('button, input, textarea')) {
+                                        return
+                                      }
+                                      startReviewMode(note.id)
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3 px-3 py-3">
+                                      {showNoteSelectionCheckboxes ? (
+                                        <input
+                                          type="checkbox"
+                                          ref={(element) => {
+                                            noteCheckboxRefs.current[note.id] =
+                                              element
+                                          }}
+                                          checked={isNoteActive}
+                                          onChange={(event) =>
+                                            handleNoteCheckboxChange(
+                                              note.id,
+                                              event.target.checked,
+                                            )
+                                          }
+                                          className="h-4 w-4 rounded border-slate-300 bg-white text-indigo-500"
+                                        />
+                                      ) : (
+                                        <span
+                                          className="h-4 w-4"
+                                          aria-hidden="true"
+                                        />
+                                      )}
+                                      <div className="flex-1">
+                                        <p className="text-sm font-semibold text-slate-900">
+                                          {note.label}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        aria-label={
+                                          isExpanded
+                                            ? 'Hide note content'
+                                            : 'Show note content'
                                         }
-                                        startReviewMode(note.id)
-                                      }}
-                                    >
-                                      <div className="flex items-center gap-3 px-3 py-3">
-                                        {showNoteSelectionCheckboxes ? (
+                                        aria-expanded={isExpanded}
+                                        onClick={(event) => {
+                                          event.preventDefault()
+                                          event.stopPropagation()
+                                          toggleNoteDetails(note.id)
+                                        }}
+                                        className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                                      >
+                                        <ChevronDown
+                                          className={`h-4 w-4 transition-transform ${
+                                            isExpanded ? 'rotate-180' : ''
+                                          }`}
+                                          aria-hidden="true"
+                                        />
+                                      </button>
+                                    </div>
+                                    {isExpanded && (
+                                      <div className="space-y-3 border-t border-slate-200/70 px-3 pb-3 pt-2">
+                                        <div className="space-y-2">
+                                          <p className="text-xs font-semibold text-slate-500">
+                                            Title
+                                          </p>
                                           <input
-                                            type="checkbox"
-                                            ref={(element) => {
-                                              noteCheckboxRefs.current[note.id] =
-                                                element
-                                            }}
-                                            checked={isNoteActive}
+                                            type="text"
+                                            value={noteTitleValue}
+                                            readOnly={!isEditing}
                                             onChange={(event) =>
-                                              handleNoteCheckboxChange(
+                                              handleNoteTitleChange(
                                                 note.id,
-                                                event.target.checked,
+                                                event.target.value,
                                               )
                                             }
-                                            className="h-4 w-4 rounded border-slate-300 bg-white text-indigo-500"
-                                          />
-                                        ) : (
-                                          <span
-                                            className="h-4 w-4"
-                                            aria-hidden="true"
-                                          />
-                                        )}
-                                        <div className="flex-1">
-                                          <p className="text-sm font-semibold text-slate-900">
-                                            {note.label}
-                                          </p>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          aria-label={
-                                            isExpanded
-                                              ? 'Hide note content'
-                                              : 'Show note content'
-                                          }
-                                          aria-expanded={isExpanded}
-                                          onClick={(event) => {
-                                            event.preventDefault()
-                                            event.stopPropagation()
-                                            toggleNoteDetails(note.id)
-                                          }}
-                                          className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                                        >
-                                          <ChevronDown
-                                            className={`h-4 w-4 transition-transform ${
-                                              isExpanded ? 'rotate-180' : ''
+                                            className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
+                                              isEditing
+                                                ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
+                                                : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
                                             }`}
-                                            aria-hidden="true"
+                                            placeholder="Add a note title"
                                           />
-                                        </button>
-                                      </div>
-                                      {isExpanded && (
-                                        <div className="space-y-3 border-t border-slate-200/70 px-3 pb-3 pt-2">
-                                          <div className="space-y-2">
-                                            <p className="text-xs font-semibold text-slate-500">
-                                              Title
-                                            </p>
-                                            <input
-                                              type="text"
-                                              value={noteTitleValue}
-                                              readOnly={!isEditing}
-                                              onChange={(event) =>
-                                                handleNoteTitleChange(
-                                                  note.id,
-                                                  event.target.value,
-                                                )
-                                              }
-                                              className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
-                                                isEditing
-                                                  ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
-                                                  : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
-                                              }`}
-                                              placeholder="Add a note title"
-                                            />
-                                          </div>
-                                          {NOTE_DETAILS_FIELD_CONFIG.map(
-                                            (field, fieldIndex) => (
-                                              <div
-                                                key={`${note.id}-${field.id}`}
-                                                className="space-y-2"
-                                              >
-                                                <p className="text-xs font-semibold text-slate-500">
-                                                  {field.label}
-                                                </p>
-                                                <textarea
-                                                  value={noteDetailsValues[fieldIndex] ?? ''}
-                                                  readOnly={!isEditing}
-                                                  onChange={(event) =>
-                                                    handleNoteDescriptionChange(
-                                                      note.id,
-                                                      fieldIndex,
-                                                      event.target.value,
-                                                    )
-                                                  }
-                                                  rows={3}
-                                                  className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
-                                                    isEditing
-                                                      ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
-                                                      : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
-                                                  }`}
-                                                  placeholder={field.placeholder}
-                                                />
-                                              </div>
-                                            ),
-                                          )}
-                                          <div className="flex gap-3 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                openDeleteNoteModal(note.id)
-                                              }
-                                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
-                                            >
-                                              Delete note
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                if (isEditing) {
-                                                  void handleSaveNoteChanges(note.id)
-                                                  return
-                                                }
-                                                setEditableNotes((prev) => ({
-                                                  ...prev,
-                                                  [note.id]: true,
-                                                }))
-                                              }}
-                                              disabled={Boolean(savingNoteIds[note.id])}
-                                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
-                                            >
-                                              {savingNoteIds[note.id]
-                                                ? 'Saving...'
-                                                : isEditing
-                                                  ? 'Save Changes'
-                                                  : 'Edit'}
-                                            </button>
-                                          </div>
-                                          {noteSaveErrors[note.id] && (
-                                            <p className="text-xs text-rose-600">
-                                              {noteSaveErrors[note.id]}
-                                            </p>
-                                          )}
                                         </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
+                                        {NOTE_DETAILS_FIELD_CONFIG.map(
+                                          (field, fieldIndex) => (
+                                            <div
+                                              key={`${note.id}-${field.id}`}
+                                              className="space-y-2"
+                                            >
+                                              <p className="text-xs font-semibold text-slate-500">
+                                                {field.label}
+                                              </p>
+                                              <textarea
+                                                value={noteDetailsValues[fieldIndex] ?? ''}
+                                                readOnly={!isEditing}
+                                                onChange={(event) =>
+                                                  handleNoteDescriptionChange(
+                                                    note.id,
+                                                    fieldIndex,
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                rows={3}
+                                                className={`w-full rounded-xl border px-3 py-2 text-sm placeholder:text-slate-400 ${
+                                                  isEditing
+                                                    ? 'border-slate-200 bg-white text-slate-900 focus:border-indigo-300 focus:outline-none'
+                                                    : 'cursor-default border-slate-200 bg-slate-100 text-slate-600'
+                                                }`}
+                                                placeholder={field.placeholder}
+                                              />
+                                            </div>
+                                          ),
+                                        )}
+                                        <div className="flex gap-3 pt-1">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openDeleteNoteModal(note.id)
+                                            }
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+                                          >
+                                            Delete note
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (isEditing) {
+                                                void handleSaveNoteChanges(note.id)
+                                                return
+                                              }
+                                              setEditableNotes((prev) => ({
+                                                ...prev,
+                                                [note.id]: true,
+                                              }))
+                                            }}
+                                            disabled={Boolean(savingNoteIds[note.id])}
+                                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                          >
+                                            {savingNoteIds[note.id]
+                                              ? 'Saving...'
+                                              : isEditing
+                                                ? 'Save Changes'
+                                                : 'Edit'}
+                                          </button>
+                                        </div>
+                                        {noteSaveErrors[note.id] && (
+                                          <p className="text-xs text-rose-600">
+                                            {noteSaveErrors[note.id]}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                               {shouldShowLlmAnnotations && (
                                 <div className="space-y-3 border-t border-slate-200/70 pt-3">
                                   <p className="text-[11px] uppercase tracking-widest text-slate-400">
@@ -4566,10 +4830,10 @@ function AnnotationPageContent() {
                                   )}
                                 </div>
                               )}
-                          </div>
-                        )}
-                        {activeAnnotationTab === 'flag' && (
-                          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+                            </div>
+                          )}
+                          {activeAnnotationTab === 'flag' && (
+                            <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
                               <div className="flex items-center gap-3">
                                 <div
                                   className={`flex h-12 w-12 items-center justify-center rounded-2xl ${flagIndicatorClass}`}
@@ -4609,9 +4873,9 @@ function AnnotationPageContent() {
                                 Flags sync with the "Show flagged only" filter so you can review
                                 critical lines quickly.
                               </p>
-                          </div>
-                        )}
-                      </div>
+                            </div>
+                          )}
+                        </div>
                     </div>
                     {shouldShowCheckedRowsPanel && (
                       <div className="space-y-4 rounded-3xl border border-indigo-100 bg-white/80 p-6 shadow-sm shadow-slate-200/60">
@@ -4649,80 +4913,70 @@ function AnnotationPageContent() {
             )}
           </aside>
         </main>
-        {isOnboardingTourVisible && onboardingStep && (
-          <>
-            <div className="fixed inset-0 z-[96] bg-transparent" />
-            {onboardingSpotlightRect ? (
-              <div
-                className="pointer-events-none fixed z-[97] rounded-2xl border-2 border-indigo-300/95 shadow-[0_0_0_9999px_rgba(15,23,42,0.64)] transition-[top,left,width,height] duration-200"
-                style={{
-                  top: `${onboardingSpotlightRect.top}px`,
-                  left: `${onboardingSpotlightRect.left}px`,
-                  width: `${onboardingSpotlightRect.width}px`,
-                  height: `${onboardingSpotlightRect.height}px`,
-                }}
-                aria-hidden="true"
-              />
-            ) : (
-              <div
-                className="pointer-events-none fixed inset-0 z-[97] bg-slate-950/65"
-                aria-hidden="true"
-              />
-            )}
-            <div className="fixed right-4 top-4 z-[98] flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg shadow-slate-900/10">
-              <span>{onboardingStepLabel}</span>
-              <button
-                type="button"
-                onClick={closeOnboardingTour}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-              >
-                Skip tour
-              </button>
-            </div>
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={`Onboarding step ${onboardingStepLabel}`}
-              className="fixed z-[98] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl shadow-slate-900/20"
-              style={
-                onboardingTooltipPosition
-                  ? {
-                      top: `${onboardingTooltipPosition.top}px`,
-                      left: `${onboardingTooltipPosition.left}px`,
-                    }
-                  : {
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                    }
-              }
-            >
-              {onboardingTooltipPosition && (
+        {isLessonGoalsOnboardingOpen &&
+          lessonGoalsOverlayPosition &&
+          lessonGoalsOnboardingStep && (
+          <section
+            className={`pointer-events-none fixed ${
+              lessonGoalsOnboardingStepIndex === 7 ? 'z-[110]' : 'z-[85]'
+            }`}
+            style={{
+              top: lessonGoalsOverlayPosition.top,
+              left: lessonGoalsOverlayPosition.left,
+              transform:
+                lessonGoalsOnboardingStepIndex === 7
+                  ? 'translateX(112px)'
+                  : undefined,
+              width:
+                lessonGoalsOverlayPosition.placement === 'bottom'
+                  ? 'calc(100vw - 2rem)'
+                  : 'min(340px, calc(100vw - 2rem))',
+              maxWidth: '340px',
+            }}
+          >
+            <div className="pointer-events-auto relative rounded-2xl border border-sky-400/80 bg-sky-600 text-white shadow-[0_20px_42px_-24px_rgba(3,105,161,0.8)]">
+              {lessonGoalsOverlayPosition.placement !== 'bottom' && (
                 <span
-                  className={`pointer-events-none absolute h-3 w-3 rotate-45 border-slate-200 bg-white ${ONBOARDING_TOOLTIP_ARROW_CLASS[onboardingTooltipPosition.placement]}`}
+                  className={`pointer-events-none absolute top-10 h-4 w-4 rotate-45 border-sky-400/80 bg-sky-600 ${
+                    lessonGoalsOverlayPosition.placement === 'right'
+                      ? '-left-2 border-b border-l'
+                      : '-right-2 border-r border-t'
+                  }`}
                   aria-hidden="true"
                 />
               )}
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-600">
-                Guided onboarding
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
-                {onboardingStep.title}
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {onboardingStep.description}
-              </p>
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleOnboardingNext}
-                  className="inline-flex items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
-                >
-                  {isLastOnboardingStep ? 'Finish' : 'Next'}
-                </button>
+              <div className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-base font-semibold leading-tight text-white">
+                    {lessonGoalsOnboardingStep.title}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={dismissLessonGoalsOnboarding}
+                    className="mt-0.5 shrink-0 rounded-lg p-1.5 text-white/90 transition hover:bg-sky-500/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    aria-label="Close lesson goals onboarding message"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-sm leading-relaxed text-sky-50">
+                  {lessonGoalsOnboardingStep.description}
+                </p>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <p className="text-sm font-medium text-sky-100">
+                    {lessonGoalsOnboardingStep.stepLabel}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleLessonGoalsOnboardingNext}
+                    className="inline-flex min-w-[4.5rem] items-center justify-center rounded-lg border border-sky-300/80 bg-sky-500/35 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  >
+                    {isLastLessonGoalsOnboardingStep ? 'Done' : 'Next'}
+                  </button>
+                </div>
               </div>
             </div>
-          </>
+          </section>
         )}
         {activeInstructionImage && (
           <div
@@ -4782,6 +5036,7 @@ function AnnotationPageContent() {
             onClick={closeExitTicketModal}
           >
             <div
+              id="onboarding-exit-ticket-dialog"
               role="dialog"
               aria-modal="true"
               aria-label="Exit ticket"

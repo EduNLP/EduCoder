@@ -3,12 +3,14 @@
 import {
   CalendarDays,
   CheckCircle2,
+  CircleHelp,
   Clock3,
   Eye,
   EyeOff,
   ListFilter,
   LogOut,
   Search,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -44,6 +46,11 @@ type ImportDemoResponse = {
 }
 
 const PREFERRED_TILE_HEIGHT = 320
+const WORKSPACE_ONBOARDING_DISMISSED_KEY = 'educoder.workspace.onboarding.dismissed'
+const WORKSPACE_ONBOARDING_TOTAL_STEPS = 10
+const WORKSPACE_ONBOARDING_STEPS = [
+  'This is the page where all your transcripts live. You can select any card to annotate it.',
+] as const
 
 const statusFilters = [
   { id: 'all', label: 'All' },
@@ -126,6 +133,11 @@ export default function DashboardPage() {
   const showImportDemoButton = !isLoading && transcripts.length === 0
   const [isImportingDemo, setIsImportingDemo] = useState(false)
   const [importDemoError, setImportDemoError] = useState<string | null>(null)
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
+  const [onboardingStage, setOnboardingStage] = useState<'prompt' | 'tour'>(
+    'prompt',
+  )
+  const [onboardingStepIndex, setOnboardingStepIndex] = useState(0)
 
   const pageBackgroundStyle = useMemo(
     () => ({
@@ -228,6 +240,18 @@ export default function DashboardPage() {
     }
   }, [fetchTranscripts])
 
+  useEffect(() => {
+    try {
+      const isDismissed =
+        window.localStorage.getItem(WORKSPACE_ONBOARDING_DISMISSED_KEY) === 'true'
+      if (!isDismissed) {
+        setIsOnboardingOpen(true)
+      }
+    } catch {
+      setIsOnboardingOpen(true)
+    }
+  }, [])
+
   if (!authLoaded || !userLoaded) {
     return (
       <div
@@ -254,8 +278,19 @@ export default function DashboardPage() {
     setToolbarVisible((previous) => !previous)
   }
 
+  const navigateToAnnotate = (
+    transcriptId: string,
+    options?: { showLessonGoalsOnboarding?: boolean },
+  ) => {
+    const search = new URLSearchParams({ transcript: transcriptId })
+    if (options?.showLessonGoalsOnboarding) {
+      search.set('onboarding', 'lesson-goals')
+    }
+    router.push(`/annotate?${search.toString()}`)
+  }
+
   const handleTileClick = (tile: WorkspaceTranscript) => {
-    router.push(`/annotate?transcript=${tile.transcriptId}`)
+    navigateToAnnotate(tile.transcriptId)
   }
 
   const handleMenuLinkAction = (link: { id: string }) => {
@@ -293,6 +328,48 @@ export default function DashboardPage() {
     } finally {
       setIsImportingDemo(false)
     }
+  }
+
+  const handleCloseOnboarding = (persistDismissal: boolean) => {
+    setIsOnboardingOpen(false)
+    setOnboardingStage('prompt')
+    setOnboardingStepIndex(0)
+    if (!persistDismissal) {
+      return
+    }
+
+    try {
+      window.localStorage.setItem(WORKSPACE_ONBOARDING_DISMISSED_KEY, 'true')
+    } catch {
+      // Ignore storage failures and continue with local state only.
+    }
+  }
+
+  const handleOpenOnboarding = () => {
+    setIsOnboardingOpen(true)
+    setOnboardingStage('prompt')
+    setOnboardingStepIndex(0)
+  }
+
+  const handleStartOnboardingTour = () => {
+    setOnboardingStage('tour')
+    setOnboardingStepIndex(0)
+  }
+
+  const handleNextOnboardingStep = () => {
+    const nextStepIndex = onboardingStepIndex + 1
+    if (nextStepIndex >= WORKSPACE_ONBOARDING_STEPS.length) {
+      handleCloseOnboarding(true)
+      const firstVisibleTile = filteredTiles[0]
+      if (firstVisibleTile) {
+        navigateToAnnotate(firstVisibleTile.transcriptId, {
+          showLessonGoalsOnboarding: true,
+        })
+      }
+      return
+    }
+
+    setOnboardingStepIndex(nextStepIndex)
   }
 
   return (
@@ -459,6 +536,84 @@ export default function DashboardPage() {
             )}
           </div>
         </section>
+      </div>
+      <div className="pointer-events-none fixed bottom-3 right-3 z-50 flex items-end gap-2 sm:bottom-4 sm:right-4">
+        {isOnboardingOpen && (
+          <section className="pointer-events-auto w-[min(340px,calc(100vw-2rem))] max-w-[340px] overflow-hidden rounded-2xl border border-sky-400/80 bg-sky-600 text-white shadow-[0_20px_42px_-24px_rgba(3,105,161,0.8)]">
+            <div className="space-y-3 p-4">
+              <div
+                className={`flex items-start gap-3 ${
+                  onboardingStage === 'prompt' || onboardingStepIndex === 0
+                    ? 'justify-between'
+                    : 'justify-end'
+                }`}
+              >
+                {onboardingStage === 'prompt' && (
+                  <p className="text-base font-semibold leading-tight text-white">
+                    Need a quick tour of the workspace?
+                  </p>
+                )}
+                {onboardingStage === 'tour' && onboardingStepIndex === 0 && (
+                  <p className="text-base font-semibold leading-tight text-white">
+                    Welcome to EduCoder
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleCloseOnboarding(true)}
+                  className="mt-0.5 shrink-0 rounded-lg p-1.5 text-white/90 transition hover:bg-sky-500/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  aria-label="Close onboarding message"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {onboardingStage === 'prompt' ? (
+                <div className="flex justify-end gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleCloseOnboarding(true)}
+                    className="rounded-lg px-3 py-1.5 text-sm text-sky-50 transition hover:bg-sky-500/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  >
+                    No thanks
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartOnboardingTour}
+                    className="inline-flex min-w-[4.5rem] items-center justify-center rounded-lg border border-sky-300/80 bg-sky-500/35 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  >
+                    Let&apos;s go
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm leading-relaxed text-sky-50">
+                    {WORKSPACE_ONBOARDING_STEPS[onboardingStepIndex]}
+                  </p>
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <p className="text-sm font-medium text-sky-100">
+                      {`${onboardingStepIndex + 1} of ${WORKSPACE_ONBOARDING_TOTAL_STEPS}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleNextOnboardingStep}
+                      className="inline-flex min-w-[4.5rem] items-center justify-center rounded-lg border border-sky-300/80 bg-sky-500/35 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+        <button
+          type="button"
+          onClick={handleOpenOnboarding}
+          className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg shadow-slate-300/70 transition hover:-translate-y-0.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+          aria-label="Open workspace onboarding message"
+        >
+          <CircleHelp className="h-6 w-6" />
+        </button>
       </div>
     </div>
   )
