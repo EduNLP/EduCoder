@@ -19,6 +19,13 @@ type DeleteBlockReason =
   | 'HAS_INSTRUCTIONAL_MATERIALS'
   | 'HAS_ASSIGNMENTS'
 
+type UpdateTranscriptBody = {
+  title?: unknown
+  grade?: unknown
+  instructionContext?: unknown
+  instruction_context?: unknown
+}
+
 const parseGcsPath = (uri: string): ParsedGcsPath => {
   if (!uri) {
     throw new Error('Storage path is required.')
@@ -89,6 +96,17 @@ const buildBlockedResponse = ({
     },
     { status: 409 },
   )
+
+const resolveTranscriptId = async (request: Request, context: RouteContext) => {
+  const params = await context.params
+  const transcriptIdFromParams = params?.transcriptId?.trim() ?? ''
+  if (transcriptIdFromParams) {
+    return transcriptIdFromParams
+  }
+
+  const searchParams = new URL(request.url).searchParams
+  return searchParams.get('transcriptId')?.trim() ?? ''
+}
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
@@ -230,6 +248,130 @@ export async function DELETE(request: Request, context: RouteContext) {
     console.error('Transcript deletion failed', error)
     return NextResponse.json(
       { error: 'Unable to delete transcript right now.' },
+      { status: 500 },
+    )
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const { userId: authUserId } = await auth()
+    if (!authUserId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const actorWhere = { auth_user_id: authUserId } as Prisma.UserWhereInput
+    const actor = await prisma.user.findFirst({
+      where: actorWhere,
+      select: { id: true, workspace_id: true },
+    })
+
+    if (!actor) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authenticated user is not registered in the application database.',
+        },
+        { status: 403 },
+      )
+    }
+
+    const transcriptId = await resolveTranscriptId(request, context)
+    if (!transcriptId) {
+      return NextResponse.json(
+        { success: false, error: 'Transcript id is required.' },
+        { status: 400 },
+      )
+    }
+
+    const payload = (await request.json().catch(() => null)) as UpdateTranscriptBody | null
+    if (!payload) {
+      return NextResponse.json(
+        { success: false, error: 'Request body is required.' },
+        { status: 400 },
+      )
+    }
+
+    if (typeof payload.title !== 'string' || typeof payload.grade !== 'string') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Transcript name and grade must be text values.',
+        },
+        { status: 400 },
+      )
+    }
+
+    const title = payload.title.trim()
+    const grade = payload.grade.trim()
+    if (!title) {
+      return NextResponse.json(
+        { success: false, error: 'Transcript name is required.' },
+        { status: 400 },
+      )
+    }
+    if (!grade) {
+      return NextResponse.json(
+        { success: false, error: 'Grade is required.' },
+        { status: 400 },
+      )
+    }
+
+    const instructionContextRaw =
+      payload.instructionContext ?? payload.instruction_context ?? ''
+
+    if (
+      instructionContextRaw !== null &&
+      instructionContextRaw !== undefined &&
+      typeof instructionContextRaw !== 'string'
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Lesson learning goals must be a text value.' },
+        { status: 400 },
+      )
+    }
+
+    const transcript = await prisma.transcripts.findFirst({
+      where: {
+        id: transcriptId,
+        workspace_id: actor.workspace_id,
+      },
+      select: { id: true },
+    })
+
+    if (!transcript) {
+      return NextResponse.json(
+        { success: false, error: 'Transcript not found.' },
+        { status: 404 },
+      )
+    }
+
+    const instructionContext =
+      typeof instructionContextRaw === 'string' ? instructionContextRaw.trim() : ''
+
+    const updatedTranscript = await prisma.transcripts.update({
+      where: { id: transcript.id },
+      data: {
+        title,
+        grade,
+        instruction_context: instructionContext,
+      },
+      select: {
+        id: true,
+        title: true,
+        grade: true,
+        instruction_context: true,
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      transcript: updatedTranscript,
+    })
+  } catch (error) {
+    console.error('Transcript update failed', error)
+    return NextResponse.json(
+      { success: false, error: 'Unable to update transcript details right now.' },
       { status: 500 },
     )
   }

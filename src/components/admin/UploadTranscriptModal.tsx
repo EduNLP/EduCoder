@@ -16,6 +16,7 @@ interface UploadTranscriptModalProps {
     id: string
     title: string
     grade: string | null
+    instruction_context: string
     transcript_file_name: string | null
     annotation_file_name: string | null
   }) => void
@@ -118,6 +119,10 @@ export default function UploadTranscriptModal({
           id: payload.transcript.id,
           title: payload.transcript.title ?? transcriptName,
           grade: payload.transcript.grade ?? trimmedGrade ?? null,
+          instruction_context:
+            typeof payload.transcript.instruction_context === 'string'
+              ? payload.transcript.instruction_context
+              : instructions.trim(),
           transcript_file_name:
             payload.transcript.transcript_file_name ?? mainFile.name,
           annotation_file_name: payload.transcript.annotation_file_name ?? null,
