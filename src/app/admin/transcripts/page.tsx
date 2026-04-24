@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Upload, FileText, Download, Trash2, BookOpen } from 'lucide-react'
+import { Search, Upload, FileText, Download, Trash2, BookOpen, Edit } from 'lucide-react'
 import UploadTranscriptModal from '@/components/admin/UploadTranscriptModal'
 import UploadInstructionMaterialsModal from '@/components/admin/UploadInstructionMaterialsModal'
+import EditTranscriptDetailsModal from '@/components/admin/EditTranscriptDetailsModal'
 
 type LlmAnnotationStatus = 'not_generated' | 'in_process' | 'generated'
 
@@ -11,6 +12,7 @@ type TranscriptRecord = {
   id: string
   title: string
   grade: string | null
+  instruction_context: string
   transcript_file_name: string | null
   annotation_file_name: string | null
   llm_annotation: LlmAnnotationStatus
@@ -22,6 +24,22 @@ type TranscriptsResponse = {
   transcripts?: Array<Omit<TranscriptRecord, 'assigned_users'> & { assigned_users?: TranscriptRecord['assigned_users'] }>
   error?: string
 }
+
+type UpdateTranscriptResponse = {
+  success: boolean
+  transcript?: Pick<TranscriptRecord, 'id' | 'title' | 'grade' | 'instruction_context'>
+  error?: string
+}
+
+type DeleteErrorPayload = {
+  code?: unknown
+  error?: unknown
+  materials?: unknown
+  assignments?: unknown
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
 
 const parseFileNameFromContentDisposition = (header: string | null) => {
   if (!header) {
@@ -49,19 +67,21 @@ const buildZipFileName = (title?: string) => {
   return safeBase.endsWith('.zip') ? safeBase : `${safeBase}.zip`
 }
 
-const buildDeleteErrorMessage = (payload: any) => {
+const buildDeleteErrorMessage = (payload: DeleteErrorPayload | null | undefined) => {
   const code = typeof payload?.code === 'string' ? payload.code : undefined
 
   if (code === 'HAS_INSTRUCTIONAL_MATERIALS') {
-    const titles = Array.isArray(payload?.materials)
-      ? payload.materials
-          .map((item: any) => {
-            const value = typeof item?.title === 'string' ? item.title.trim() : ''
-            return value || null
-          })
-          .filter((value: string | null): value is string => Boolean(value))
-      : []
-    const count = Array.isArray(payload?.materials) ? payload.materials.length : 0
+    const materials = Array.isArray(payload?.materials) ? payload.materials : []
+    const titles = materials
+      .map((item) => {
+        if (!isRecord(item)) {
+          return null
+        }
+        const value = typeof item.title === 'string' ? item.title.trim() : ''
+        return value || null
+      })
+      .filter((value): value is string => Boolean(value))
+    const count = materials.length
     const descriptor =
       count > 0 ? `${count} instructional material${count === 1 ? '' : 's'}` : 'instructional materials'
     const titlesText = titles.length > 0 ? ` (${titles.join(', ')})` : ''
@@ -69,19 +89,19 @@ const buildDeleteErrorMessage = (payload: any) => {
   }
 
   if (code === 'HAS_ASSIGNMENTS') {
-    const names = Array.isArray(payload?.assignments)
-      ? payload.assignments
-          .map((item: any) => {
-            const nameCandidate =
-              typeof item?.name === 'string' && item.name.trim() ? item.name.trim() : null
-            const usernameCandidate =
-              typeof item?.username === 'string' && item.username.trim()
-                ? item.username.trim()
-                : null
-            return nameCandidate || usernameCandidate
-          })
-          .filter((value: string | null): value is string => Boolean(value))
-      : []
+    const assignments = Array.isArray(payload?.assignments) ? payload.assignments : []
+    const names = assignments
+      .map((item) => {
+        if (!isRecord(item)) {
+          return null
+        }
+        const nameCandidate =
+          typeof item.name === 'string' && item.name.trim() ? item.name.trim() : null
+        const usernameCandidate =
+          typeof item.username === 'string' && item.username.trim() ? item.username.trim() : null
+        return nameCandidate || usernameCandidate
+      })
+      .filter((value): value is string => Boolean(value))
     const nameText = names.length > 0 ? ` (${names.join(', ')})` : ''
     return `Remove annotator assignments${nameText} before deleting this transcript.`
   }
@@ -104,11 +124,15 @@ export default function TranscriptsPage() {
   const [downloadError, setDownloadError] = useState<{ transcriptId: string; message: string } | null>(null)
   const [deletingTranscriptId, setDeletingTranscriptId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<{ transcriptId: string; message: string } | null>(null)
+  const [editingTranscriptId, setEditingTranscriptId] = useState<string | null>(null)
+  const [isSavingTranscriptDetails, setIsSavingTranscriptDetails] = useState(false)
+  const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null)
 
   const handleTranscriptUploaded = (transcript: {
     id: string
     title: string
     grade: string | null
+    instruction_context: string
     transcript_file_name: string | null
     annotation_file_name: string | null
     llm_annotation?: LlmAnnotationStatus
@@ -117,6 +141,7 @@ export default function TranscriptsPage() {
       const normalized: TranscriptRecord = {
         ...transcript,
         grade: transcript.grade?.trim() || null,
+        instruction_context: transcript.instruction_context?.trim() || '',
         transcript_file_name: transcript.transcript_file_name ?? null,
         annotation_file_name: transcript.annotation_file_name ?? null,
         llm_annotation: transcript.llm_annotation ?? 'not_generated',
@@ -157,6 +182,7 @@ export default function TranscriptsPage() {
           const normalized: TranscriptRecord[] = (payload.transcripts ?? []).map((transcript) => ({
             ...transcript,
             grade: transcript.grade?.trim() || null,
+            instruction_context: transcript.instruction_context?.trim() || '',
             transcript_file_name: transcript.transcript_file_name ?? null,
             annotation_file_name: transcript.annotation_file_name ?? null,
             llm_annotation: transcript.llm_annotation ?? 'not_generated',
@@ -280,6 +306,75 @@ export default function TranscriptsPage() {
     }
   }
 
+  const handleOpenEditModal = (transcriptId: string) => {
+    setEditingTranscriptId(transcriptId)
+    setEditErrorMessage(null)
+  }
+
+  const handleCloseEditModal = () => {
+    if (isSavingTranscriptDetails) {
+      return
+    }
+    setEditingTranscriptId(null)
+    setEditErrorMessage(null)
+  }
+
+  const handleSaveTranscriptDetails = async (values: {
+    title: string
+    grade: string
+    instructionContext: string
+  }) => {
+    if (!editingTranscriptId) {
+      return
+    }
+
+    setEditErrorMessage(null)
+    setIsSavingTranscriptDetails(true)
+
+    try {
+      const response = await fetch(
+        `/api/admin/transcripts/${encodeURIComponent(editingTranscriptId)}?transcriptId=${encodeURIComponent(editingTranscriptId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        },
+      )
+      const payload: UpdateTranscriptResponse | null = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.success || !payload.transcript) {
+        throw new Error(payload?.error ?? 'Failed to update transcript details.')
+      }
+
+      setTranscripts((previous) =>
+        previous.map((item) =>
+          item.id === editingTranscriptId
+            ? {
+                ...item,
+                title: payload.transcript?.title ?? values.title,
+                grade: payload.transcript?.grade?.trim() || null,
+                instruction_context:
+                  payload.transcript?.instruction_context ?? values.instructionContext,
+              }
+            : item,
+        ),
+      )
+      setEditingTranscriptId(null)
+    } catch (error) {
+      console.error('Failed to update transcript details', error)
+      setEditErrorMessage(
+        error instanceof Error ? error.message : 'Failed to update transcript details.',
+      )
+    } finally {
+      setIsSavingTranscriptDetails(false)
+    }
+  }
+
+  const editingTranscript =
+    editingTranscriptId !== null
+      ? transcripts.find((transcript) => transcript.id === editingTranscriptId) ?? null
+      : null
+
   const filteredTranscripts = transcripts.filter((t) =>
     t.title.toLowerCase().includes(searchQuery.toLowerCase()),
   )
@@ -367,6 +462,14 @@ export default function TranscriptsPage() {
                 </div>
               </div>
 
+              {/* Lesson Goals */}
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700 mb-1">Lesson Learning Goals:</p>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap break-words">
+                  {transcript.instruction_context?.trim() || 'Not provided'}
+                </p>
+              </div>
+
               {/* Annotators */}
               <div className="mb-4">
                 <p className="text-sm font-medium text-gray-700 mb-2">
@@ -394,6 +497,20 @@ export default function TranscriptsPage() {
               {/* Actions */}
               <div className="flex flex-col gap-2 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenEditModal(transcript.id)}
+                    className={`flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors ${
+                      isSavingTranscriptDetails && editingTranscriptId === transcript.id
+                        ? 'opacity-70 cursor-not-allowed'
+                        : ''
+                    }`}
+                    disabled={isSavingTranscriptDetails && editingTranscriptId === transcript.id}
+                    title="Edit transcript details"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="text-sm font-medium">Edit Details</span>
+                  </button>
+
                   <button
                     onClick={() => handleDownloadTranscript(transcript.id)}
                     className={`flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors ${
@@ -477,6 +594,15 @@ export default function TranscriptsPage() {
           }
         />
       )}
+
+      <EditTranscriptDetailsModal
+        isOpen={editingTranscript !== null}
+        transcript={editingTranscript}
+        isSaving={isSavingTranscriptDetails}
+        errorMessage={editErrorMessage}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveTranscriptDetails}
+      />
     </div>
   )
 }
