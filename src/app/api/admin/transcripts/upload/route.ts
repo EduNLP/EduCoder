@@ -147,14 +147,16 @@ export async function POST(request: Request) {
           "transcript_id",
           "created_by",
           "note_creation_prompt",
-          "note_assignment_prompt"
+          "note_assignment_prompt",
+          "annotate_all_segments"
         )
         VALUES (
           ${randomUUID()},
           ${transcript.id},
           ${uploader.id},
           ${noteCreationPrompt},
-          ${noteAssignmentPrompt}
+          ${noteAssignmentPrompt},
+          ${true}
         )
       `
 
