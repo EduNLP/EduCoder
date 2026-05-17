@@ -494,14 +494,16 @@ const importDemoDefinition = async ({
         "transcript_id",
         "created_by",
         "note_creation_prompt",
-        "note_assignment_prompt"
+        "note_assignment_prompt",
+        "annotate_all_segments"
       )
       VALUES (
         ${randomUUID()},
         ${createdTranscript.id},
         ${actor.id},
         ${noteCreationPrompt},
-        ${noteAssignmentPrompt}
+        ${noteAssignmentPrompt},
+        ${true}
       )
     `
 

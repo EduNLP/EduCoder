@@ -77,9 +77,8 @@ type RouteContext = {
 type PromptSettingsRow = {
   note_creation_prompt: string
   note_assignment_prompt: string
-  annotate_all_lines: boolean
-  range_start_line: number | null
-  range_end_line: number | null
+  annotate_all_segments: boolean
+  selected_segment_ids_json: string | null
 }
 
 type PromptSourceLine = {
@@ -455,6 +454,30 @@ const buildNoteAssignmentPrompt = ({
 const buildTranscriptLineMatchKey = (speaker: string, utterance: string) =>
   `${speaker.trim().toLowerCase()}::${utterance.trim().toLowerCase()}`
 
+const parseSelectedSegmentIdsJson = (value: string | null) => {
+  if (!value) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return Array.from(
+      new Set(
+        parsed
+          .filter((segmentId): segmentId is string => typeof segmentId === 'string')
+          .map((segmentId) => segmentId.trim())
+          .filter(Boolean),
+      ),
+    )
+  } catch {
+    return []
+  }
+}
+
 const requestOpenAiJsonOutput = async ({
   openAiApiKey,
   input,
@@ -590,9 +613,8 @@ export async function POST(request: Request, context: RouteContext) {
       SELECT
         "note_creation_prompt",
         "note_assignment_prompt",
-        "annotate_all_lines",
-        "range_start_line",
-        "range_end_line"
+        "annotate_all_segments",
+        "selected_segment_ids_json"
       FROM "LLMNotePrompts"
       WHERE "transcript_id" = ${transcriptId}
       ORDER BY "createdAt" DESC
@@ -607,42 +629,63 @@ export async function POST(request: Request, context: RouteContext) {
       )
     }
 
-    let lineRange: { gte: number; lte: number } | undefined
-    if (!promptSettings.annotate_all_lines) {
-      if (
-        promptSettings.range_start_line === null ||
-        promptSettings.range_end_line === null
-      ) {
+    const orderedSegments = await prisma.transcriptSegments.findMany({
+      where: { transcript_id: transcriptId },
+      orderBy: { segment_index: 'asc' },
+      select: {
+        id: true,
+        segment_index: true,
+        segment_title: true,
+      },
+    })
+
+    const selectedSegmentIds = promptSettings.annotate_all_segments
+      ? []
+      : parseSelectedSegmentIdsJson(promptSettings.selected_segment_ids_json)
+    const selectedSegmentIdSet = new Set(selectedSegmentIds)
+
+    if (!promptSettings.annotate_all_segments) {
+      if (selectedSegmentIds.length === 0) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Line range settings are incomplete for this transcript.',
+            error: 'No segments are selected for this transcript.',
           },
           { status: 400 },
         )
       }
 
-      if (promptSettings.range_start_line > promptSettings.range_end_line) {
+      const validSegmentIdSet = new Set(orderedSegments.map((segment) => segment.id))
+      const invalidSegmentIds = selectedSegmentIds.filter(
+        (segmentId) => !validSegmentIdSet.has(segmentId),
+      )
+      if (invalidSegmentIds.length > 0) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Start line cannot be greater than end line.',
+            error: 'One or more selected segments are invalid for this transcript.',
           },
           { status: 400 },
         )
       }
+    }
 
-      lineRange = {
-        gte: promptSettings.range_start_line,
-        lte: promptSettings.range_end_line,
+    const lineWhere: {
+      transcript_id: string
+      segment_id?: {
+        in: string[]
+      }
+    } = {
+      transcript_id: transcriptId,
+    }
+    if (!promptSettings.annotate_all_segments) {
+      lineWhere.segment_id = {
+        in: selectedSegmentIds,
       }
     }
 
     const transcriptLines = await prisma.transcriptLines.findMany({
-      where: {
-        transcript_id: transcriptId,
-        ...(lineRange ? { line: lineRange } : {}),
-      },
+      where: lineWhere,
       orderBy: { line: 'asc' },
       select: {
         line_id: true,
@@ -779,16 +822,6 @@ export async function POST(request: Request, context: RouteContext) {
       }
     })
 
-    const orderedSegments = await prisma.transcriptSegments.findMany({
-      where: { transcript_id: transcriptId },
-      orderBy: { segment_index: 'asc' },
-      select: {
-        id: true,
-        segment_index: true,
-        segment_title: true,
-      },
-    })
-
     const linesBySegmentId = new Map<string, PromptSourceLine[]>()
     const unsegmentedLines: PromptSourceLine[] = []
     promptLines.forEach((line) => {
@@ -809,6 +842,10 @@ export async function POST(request: Request, context: RouteContext) {
     const knownSegmentIds = new Set<string>()
 
     orderedSegments.forEach((segment) => {
+      if (!promptSettings.annotate_all_segments && !selectedSegmentIdSet.has(segment.id)) {
+        return
+      }
+
       const lines = linesBySegmentId.get(segment.id) ?? []
       if (lines.length === 0) {
         return

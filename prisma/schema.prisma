@@ -306,9 +306,11 @@ model LLMNotePrompts {
   note_assignment_prompt String   @db.Text
 
   annotate_all_lines     Boolean  @default(true)
+  annotate_all_segments  Boolean  @default(true)
 
   range_start_line       Int?
   range_end_line         Int?
+  selected_segment_ids_json String? @db.Text
 
   createdAt              DateTime @default(now())
 

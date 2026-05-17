@@ -57,14 +57,22 @@ type TranscriptsResponse = {
 type LlmNotePromptsPayload = {
   note_creation_prompt: string
   note_assignment_prompt: string
-  annotate_all_lines: boolean
-  range_start_line: number | null
-  range_end_line: number | null
+  annotate_all_segments: boolean
+  selected_segment_ids: string[]
+}
+
+type TranscriptSegmentOptionPayload = {
+  id: string
+  title: string
+  index: number
+  is_default_generated?: boolean
 }
 
 type LlmNotePromptsResponse = {
   success: boolean
   settings?: LlmNotePromptsPayload | null
+  segments?: TranscriptSegmentOptionPayload[]
+  segment_metadata_available?: boolean
   error?: string
 }
 
@@ -89,11 +97,17 @@ type SaveVisibilityResponse = {
 }
 
 type LlmAnnotationSettings = {
-  scope: 'all' | 'range'
-  startLine: string
-  endLine: string
+  scope: 'all' | 'segments'
+  selectedSegmentIds: string[]
   noteCreationPrompt: string
   noteAssignmentPrompt: string
+}
+
+type TranscriptSegmentOption = {
+  id: string
+  title: string
+  index: number
+  isDefaultGenerated: boolean
 }
 
 type AnnotatorVisibility = 'never' | 'after' | 'always'
@@ -107,25 +121,61 @@ type AssignedAnnotator = {
 
 const DEFAULT_LLM_SETTINGS: LlmAnnotationSettings = {
   scope: 'all',
-  startLine: '',
-  endLine: '',
+  selectedSegmentIds: [],
   noteCreationPrompt: '',
   noteAssignmentPrompt: '',
 }
 
+const normalizeSegmentOptions = (
+  payload: TranscriptSegmentOptionPayload[] | undefined,
+): TranscriptSegmentOption[] => {
+  if (!Array.isArray(payload)) {
+    return []
+  }
+
+  return payload
+    .map((segment) => {
+      const id = typeof segment.id === 'string' ? segment.id.trim() : ''
+      if (!id) {
+        return null
+      }
+
+      const index = Number.isInteger(segment.index) ? segment.index : 0
+      const title =
+        typeof segment.title === 'string' && segment.title.trim()
+          ? segment.title.trim()
+          : `Segment ${index || 1}`
+      const isDefaultGenerated = Boolean(segment.is_default_generated)
+
+      return { id, title, index, isDefaultGenerated }
+    })
+    .filter((segment): segment is TranscriptSegmentOption => segment !== null)
+    .sort((left, right) => left.index - right.index)
+}
+
 const normalizeLlmSettings = (
   payload: LlmNotePromptsPayload | null | undefined,
+  segmentOptions: TranscriptSegmentOption[] = [],
 ): LlmAnnotationSettings => {
   if (!payload) {
     return DEFAULT_LLM_SETTINGS
   }
 
+  const validSegmentIdSet = new Set(segmentOptions.map((segment) => segment.id))
+  const selectedSegmentIds = Array.isArray(payload.selected_segment_ids)
+    ? Array.from(
+        new Set(
+          payload.selected_segment_ids
+            .filter((segmentId): segmentId is string => typeof segmentId === 'string')
+            .map((segmentId) => segmentId.trim())
+            .filter((segmentId) => segmentId && validSegmentIdSet.has(segmentId)),
+        ),
+      )
+    : []
+
   return {
-    scope: payload.annotate_all_lines ? 'all' : 'range',
-    startLine:
-      typeof payload.range_start_line === 'number' ? String(payload.range_start_line) : '',
-    endLine:
-      typeof payload.range_end_line === 'number' ? String(payload.range_end_line) : '',
+    scope: payload.annotate_all_segments ? 'all' : 'segments',
+    selectedSegmentIds,
     noteCreationPrompt: payload.note_creation_prompt ?? '',
     noteAssignmentPrompt: payload.note_assignment_prompt ?? '',
   }
@@ -289,6 +339,12 @@ export default function LlmAnnotationsPage() {
   const [llmSettingsByTranscriptId, setLlmSettingsByTranscriptId] = useState<
     Record<string, LlmAnnotationSettings>
   >({})
+  const [segmentOptionsByTranscriptId, setSegmentOptionsByTranscriptId] = useState<
+    Record<string, TranscriptSegmentOption[]>
+  >({})
+  const [segmentMetadataAvailableByTranscriptId, setSegmentMetadataAvailableByTranscriptId] = useState<
+    Record<string, boolean>
+  >({})
   const [isSettingsLoading, setIsSettingsLoading] = useState(false)
   const [isSettingsSaving, setIsSettingsSaving] = useState(false)
   const [settingsErrorMessage, setSettingsErrorMessage] = useState<string | null>(null)
@@ -388,9 +444,20 @@ export default function LlmAnnotationsPage() {
           return
         }
 
+        const segmentOptions = normalizeSegmentOptions(payload?.segments)
+        const segmentMetadataAvailable = payload?.segment_metadata_available !== false
+
+        setSegmentOptionsByTranscriptId((previous) => ({
+          ...previous,
+          [transcriptId]: segmentOptions,
+        }))
+        setSegmentMetadataAvailableByTranscriptId((previous) => ({
+          ...previous,
+          [transcriptId]: segmentMetadataAvailable,
+        }))
         setLlmSettingsByTranscriptId((previous) => ({
           ...previous,
-          [transcriptId]: normalizeLlmSettings(payload.settings ?? null),
+          [transcriptId]: normalizeLlmSettings(payload.settings ?? null, segmentOptions),
         }))
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -619,6 +686,20 @@ export default function LlmAnnotationsPage() {
     })
   }
 
+  const handleToggleSegmentSelection = (transcriptId: string, segmentId: string) => {
+    const currentSettings = llmSettingsByTranscriptId[transcriptId] ?? DEFAULT_LLM_SETTINGS
+    const selected = new Set(currentSettings.selectedSegmentIds)
+    if (selected.has(segmentId)) {
+      selected.delete(segmentId)
+    } else {
+      selected.add(segmentId)
+    }
+
+    updateLlmSettings(transcriptId, {
+      selectedSegmentIds: Array.from(selected),
+    })
+  }
+
   const openSettingsModal = (transcript: TranscriptRecord) => {
     setSettingsErrorMessage(null)
     setSettingsTranscript(transcript)
@@ -640,6 +721,24 @@ export default function LlmAnnotationsPage() {
 
     const transcriptId = settingsTranscript.id
     const currentSettings = llmSettingsByTranscriptId[transcriptId] ?? DEFAULT_LLM_SETTINGS
+    const isSegmentMetadataAvailable =
+      segmentMetadataAvailableByTranscriptId[transcriptId] ?? true
+    const selectedSegmentIds =
+      currentSettings.scope === 'segments'
+        ? currentSettings.selectedSegmentIds
+        : []
+
+    if (!isSegmentMetadataAvailable && currentSettings.scope !== 'all') {
+      setSettingsErrorMessage(
+        'No segment metadata was found. Select "Annotate entire transcript" before saving.',
+      )
+      return
+    }
+
+    if (currentSettings.scope === 'segments' && selectedSegmentIds.length === 0) {
+      setSettingsErrorMessage('Select at least one segment to annotate.')
+      return
+    }
 
     setIsSettingsSaving(true)
     setSettingsErrorMessage(null)
@@ -652,8 +751,7 @@ export default function LlmAnnotationsPage() {
         },
         body: JSON.stringify({
           scope: currentSettings.scope,
-          startLine: currentSettings.scope === 'range' ? currentSettings.startLine : null,
-          endLine: currentSettings.scope === 'range' ? currentSettings.endLine : null,
+          segmentIds: currentSettings.scope === 'segments' ? selectedSegmentIds : null,
           noteCreationPrompt: currentSettings.noteCreationPrompt,
           noteAssignmentPrompt: currentSettings.noteAssignmentPrompt,
         }),
@@ -665,9 +763,19 @@ export default function LlmAnnotationsPage() {
         throw new Error(message)
       }
 
+      const segmentOptions = normalizeSegmentOptions(payload?.segments)
+      const segmentMetadataAvailable = payload?.segment_metadata_available !== false
+      setSegmentOptionsByTranscriptId((previous) => ({
+        ...previous,
+        [transcriptId]: segmentOptions,
+      }))
+      setSegmentMetadataAvailableByTranscriptId((previous) => ({
+        ...previous,
+        [transcriptId]: segmentMetadataAvailable,
+      }))
       setLlmSettingsByTranscriptId((previous) => ({
         ...previous,
-        [transcriptId]: normalizeLlmSettings(payload.settings ?? null),
+        [transcriptId]: normalizeLlmSettings(payload.settings ?? null, segmentOptions),
       }))
       setSettingsTranscript(null)
     } catch (error) {
@@ -842,6 +950,14 @@ export default function LlmAnnotationsPage() {
 
   const activeSettings =
     settingsTranscript ? llmSettingsByTranscriptId[settingsTranscript.id] ?? DEFAULT_LLM_SETTINGS : null
+  const activeSegmentOptions = settingsTranscript
+    ? segmentOptionsByTranscriptId[settingsTranscript.id] ?? []
+    : []
+  const isSegmentMetadataAvailable = settingsTranscript
+    ? segmentMetadataAvailableByTranscriptId[settingsTranscript.id] ?? true
+    : true
+  const isSegmentScope = (activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'segments'
+  const selectedSegmentIdSet = new Set(activeSettings?.selectedSegmentIds ?? [])
 
   return (
     <div className="p-8">
@@ -1344,76 +1460,86 @@ export default function LlmAnnotationsPage() {
                 )}
 
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Transcript line selection</p>
+                  <p className="text-sm font-semibold text-gray-900">Transcript scope</p>
                   <p className="text-xs text-gray-600 mt-1">
-                    Choose whether to annotate the full transcript or a specific line range.
+                    Choose whether to annotate the full transcript or selected segments.
                   </p>
 
                   <div className="mt-4 space-y-3">
                     <label className="flex items-center gap-3 text-sm text-gray-700">
                       <input
                         type="radio"
-                        name="llm-line-scope"
+                        name="llm-segment-scope"
                         checked={(activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'all'}
-                        onChange={() => updateLlmSettings(settingsTranscript.id, { scope: 'all' })}
+                        onChange={() => {
+                          updateLlmSettings(settingsTranscript.id, { scope: 'all' })
+                          setSettingsErrorMessage(null)
+                        }}
                         disabled={isSettingsLoading || isSettingsSaving}
                         className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                       />
-                      Annotate all lines
+                      Annotate entire transcript
                     </label>
                     <label className="flex items-center gap-3 text-sm text-gray-700">
                       <input
                         type="radio"
-                        name="llm-line-scope"
-                        checked={(activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'range'}
-                        onChange={() => updateLlmSettings(settingsTranscript.id, { scope: 'range' })}
+                        name="llm-segment-scope"
+                        checked={(activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) === 'segments'}
+                        onChange={() =>
+                          updateLlmSettings(settingsTranscript.id, {
+                            scope: 'segments',
+                          })
+                        }
                         disabled={isSettingsLoading || isSettingsSaving}
                         className="h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                       />
-                      Annotate a line range
+                      Annotate specific segments
                     </label>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="text-xs text-gray-600">
-                        Start line
-                        <input
-                          type="number"
-                          min={1}
-                          inputMode="numeric"
-                          value={activeSettings?.startLine ?? ''}
-                          onChange={(event) =>
-                            updateLlmSettings(settingsTranscript.id, { startLine: event.target.value })
-                          }
-                          disabled={
-                            (activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) !== 'range' ||
-                            isSettingsLoading ||
-                            isSettingsSaving
-                          }
-                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
-                          placeholder="e.g. 1"
-                        />
-                      </label>
-                      <label className="text-xs text-gray-600">
-                        End line
-                        <input
-                          type="number"
-                          min={1}
-                          inputMode="numeric"
-                          value={activeSettings?.endLine ?? ''}
-                          onChange={(event) =>
-                            updateLlmSettings(settingsTranscript.id, { endLine: event.target.value })
-                          }
-                          disabled={
-                            (activeSettings?.scope ?? DEFAULT_LLM_SETTINGS.scope) !== 'range' ||
-                            isSettingsLoading ||
-                            isSettingsSaving
-                          }
-                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
-                          placeholder="e.g. 120"
-                        />
-                      </label>
-                    </div>
                   </div>
+
+                  {isSegmentScope && (
+                    <div className="mt-4">
+                      {!isSegmentMetadataAvailable ? (
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                          No segment column metadata was found in the uploaded transcript file.
+                          Select "Annotate entire transcript" before saving.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm font-semibold text-gray-900">Segments</p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Select one or more segments to annotate.
+                          </p>
+                        <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
+                          {activeSegmentOptions.length === 0 ? (
+                            <p className="text-xs text-gray-500">
+                              No segments found for this transcript.
+                            </p>
+                          ) : (
+                            activeSegmentOptions.map((segment) => (
+                              <label
+                                key={segment.id}
+                                className="flex items-center gap-3 py-1 text-sm text-gray-700"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSegmentIdSet.has(segment.id)}
+                                  onChange={() =>
+                                    handleToggleSegmentSelection(settingsTranscript.id, segment.id)
+                                  }
+                                  disabled={isSettingsLoading || isSettingsSaving}
+                                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                />
+                                <span>{segment.title}</span>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                        </>
+                      )}
+
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
